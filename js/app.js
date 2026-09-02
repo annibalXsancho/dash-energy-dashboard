@@ -1,11 +1,11 @@
 // Assemblage : état, contrôles, rendu. C'est le seul module qui touche au DOM
 // et le seul qui connaisse à la fois les données et les figures.
 
-import * as data from "./data.js?v=2";
-import * as figures from "./figures.js?v=2";
-import * as theme from "./theme.js?v=2";
-import * as tariff from "./tariff.js?v=2";
-import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=2";
+import * as data from "./data.js?v=3";
+import * as figures from "./figures.js?v=3";
+import * as theme from "./theme.js?v=3";
+import * as tariff from "./tariff.js?v=3";
+import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=3";
 
 const DEFAULT_CSV = "data/sample_energy.csv";
 const SHEETJS_SRC = "vendor/xlsx-0.20.3.full.min.js";
@@ -303,6 +303,28 @@ function applyMapper() {
   } catch (error) {
     say(error.message, "is-error");
   }
+}
+
+/** Désignation des colonnes transportée dans l'adresse.
+ *
+ *  `?data=<url>&t=0&p=6&s=-1&u=W&n=site A` ouvre directement le bon tableau de
+ *  bord, sur n'importe quel navigateur, sans passer par le formulaire : c'est
+ *  ce qui rend un signet partageable. Sans `p`, on retombe sur la détection
+ *  automatique et le formulaire.
+ */
+function mappingFromParams(params) {
+  if (!params.has("p")) return null;
+  const num = (key, fallback) => {
+    const value = Number(params.get(key));
+    return Number.isFinite(value) ? value : fallback;
+  };
+  return {
+    timestamp: num("t", 0),
+    power: num("p", -1),
+    site: num("s", -1),
+    unit: params.get("u") || "kW",
+    siteName: params.get("n") || "",
+  };
 }
 
 /** Transforme une adresse de feuille Google en adresse de CSV. */
@@ -758,8 +780,22 @@ async function boot() {
   }
 
   const url = param || DEFAULT_CSV;
+  const name = param && /docs\.google\.com/.test(param)
+    ? "Google Sheets"
+    : url.split("/").pop().split("?")[0] || "données";
   try {
-    loadText(await fetchText(url), url.split("/").pop().split("?")[0] || "données");
+    const text = await fetchText(sheetCsvUrl(url));
+    const forced = param && mappingFromParams(new URLSearchParams(location.search));
+    if (forced) {
+      const table = data.readTable(text);
+      const rows = data.toMeasures(table, forced);
+      adopt(new data.Dataset(rows, forced.siteName || name), {
+        message: `${fmt(rows.length)} mesures chargées depuis l'adresse`,
+        tone: "is-ok",
+      });
+      return;
+    }
+    loadText(text, name);
   } catch (error) {
     nodes.chip.textContent = "aucune donnée";
     say(error.message, "is-error");

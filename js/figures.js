@@ -5,7 +5,7 @@
 // des ordonnées par graphique, grille discrète, écart de 2 px entre deux aplats
 // voisins, survol partout, étiquettes directes seulement là où elles tiennent.
 
-import * as theme from "./theme.js?v=2";
+import * as theme from "./theme.js?v=3";
 
 /** Figure de repli quand la sélection ne renvoie rien. */
 export function empty(message = "Aucune donnée sur cette sélection") {

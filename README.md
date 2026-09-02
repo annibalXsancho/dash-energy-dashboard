@@ -232,8 +232,27 @@ publication.
 > propres relevés, c'est commode. Pour ceux d'un client, **jamais** : téléchargez
 > le fichier et chargez-le localement, ou travaillez depuis le lanceur hors ligne.
 
-Le paramètre d'adresse `?data=<url>` fait la même chose sans mémoriser, pratique
-pour un signet dédié à une mission.
+### Un signet qui ouvre directement les bonnes données
+
+`?data=<url>` charge une source sans la mémoriser. Pour qu'un signet fonctionne
+**du premier coup sur n'importe quel navigateur**, on peut y joindre la
+désignation des colonnes :
+
+| Paramètre | Rôle |
+|---|---|
+| `data` | adresse du CSV (feuille publiée, fichier en ligne…) |
+| `t` | numéro de la colonne date/heure (0 = la première) |
+| `p` | numéro de la colonne de puissance |
+| `s` | numéro de la colonne de site, ou `-1` s'il n'y en a pas |
+| `u` | unité : `W`, `kW` ou `MW` |
+| `n` | nom du site quand `s=-1` |
+
+Exemple :
+`…/?data=https://…/pub%3Foutput%3Dcsv&t=0&p=6&s=-1&u=W&n=site%20A`
+
+Sans `p`, la page retombe sur la détection automatique et le formulaire.
+Rappel : l'adresse contient le lien de la feuille — un signet de ce genre ne se
+partage pas avec des données client.
 
 Les deux versions du tableau de bord acceptent le même fichier ; en revanche la
 désignation de colonnes, l'Excel et les liens n'existent que dans la page web.
