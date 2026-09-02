@@ -5,7 +5,7 @@
 // des ordonnées par graphique, grille discrète, écart de 2 px entre deux aplats
 // voisins, survol partout, étiquettes directes seulement là où elles tiennent.
 
-import * as theme from "./theme.js";
+import * as theme from "./theme.js?v=2";
 
 /** Figure de repli quand la sélection ne renvoie rien. */
 export function empty(message = "Aucune donnée sur cette sélection") {
@@ -199,7 +199,10 @@ export function loadProfile(matrix) {
       // L'échelle part de zéro : les heures creuses se fondent dans le fond et
       // le contraste jour/nuit saute aux yeux.
       zmin: 0,
-      xgap: 2,
+      // L'écart entre cellules sépare joliment 30 colonnes ; sur 500 jours,
+      // chaque colonne fait moins de 2 px et l'écart efface le dessin. On le
+      // retire dès que les cellules deviennent trop fines.
+      xgap: matrix.days.length > 90 ? 0 : 2,
       ygap: 2,
       hovertemplate: "%{x|%d/%m} · %{y}<br>%{z:,.0f} kW<extra></extra>",
       colorbar: {

@@ -28,7 +28,8 @@ ROOT = Path(__file__).resolve().parent.parent
 MODULES = ["theme", "format", "data", "tariff", "figures", "app"]
 
 IMPORT_RE = re.compile(
-    r'^import\s+(?:\*\s+as\s+(?P<ns>\w+)|\{(?P<names>[^}]*)\})\s+from\s+"\./(?P<mod>\w+)\.js";\s*$',
+    r'^import\s+(?:\*\s+as\s+(?P<ns>\w+)|\{(?P<names>[^}]*)\})\s+from\s+'
+    r'"\./(?P<mod>\w+)\.js(?:\?v=\d+)?";\s*$',
     re.M,
 )
 EXPORT_RE = re.compile(r"^export\s+(?:const|let|var|function|class)\s+(\w+)", re.M)
@@ -79,9 +80,10 @@ def build(csv_path: Path, config: dict) -> str:
     locale = (ROOT / "vendor" / "plotly-locale-fr.js").read_text(encoding="utf-8")
     payload = base64.b64encode(csv_path.read_bytes()).decode("ascii")
 
-    html = html.replace(
-        '<link rel="stylesheet" href="css/style.css?v=1">',
-        f"<style>\n{css}\n</style>",
+    html = re.sub(
+        r'<link rel="stylesheet" href="css/style\.css\?v=\d+">',
+        lambda _: f"<style>\n{css}\n</style>",
+        html,
     )
     html = html.replace(
         '<script src="vendor/plotly-cartesian-4.0.0.min.js" charset="utf-8"></script>',
@@ -91,8 +93,9 @@ def build(csv_path: Path, config: dict) -> str:
         '<script src="vendor/plotly-locale-fr.js" charset="utf-8"></script>',
         f"<script>{safe(locale)}</script>",
     )
+    html = re.sub(r'<script type="module" src="js/app\.js\?v=\d+"></script>', "@@BUNDLE@@", html)
     html = html.replace(
-        '<script type="module" src="js/app.js?v=1"></script>',
+        "@@BUNDLE@@",
         '<script type="application/json" id="embedded-config">'
         + safe(json.dumps(config, ensure_ascii=False))
         + "</script>\n"

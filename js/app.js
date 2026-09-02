@@ -1,11 +1,11 @@
 // Assemblage : état, contrôles, rendu. C'est le seul module qui touche au DOM
 // et le seul qui connaisse à la fois les données et les figures.
 
-import * as data from "./data.js";
-import * as figures from "./figures.js";
-import * as theme from "./theme.js";
-import * as tariff from "./tariff.js";
-import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js";
+import * as data from "./data.js?v=2";
+import * as figures from "./figures.js?v=2";
+import * as theme from "./theme.js?v=2";
+import * as tariff from "./tariff.js?v=2";
+import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=2";
 
 const DEFAULT_CSV = "data/sample_energy.csv";
 const SHEETJS_SRC = "vendor/xlsx-0.20.3.full.min.js";

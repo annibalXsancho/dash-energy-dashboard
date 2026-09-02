@@ -277,6 +277,7 @@ Ouvrir le tableau de bord.command   lanceur : double-clic depuis le Finder
 js/tariff.js                 prix, heures creuses, puissance souscrite, dépassements
 vendor/                      plotly + lecteur Excel embarqués (voir vendor/LISEZ-MOI.md)
 scripts/build_export.py      fabrique un livrable HTML autonome
+scripts/bump_version.py      incrémente le ?v= des CSS/JS (à lancer après toute modification)
 scripts/generate_sample_data.py  regénère le jeu de démonstration
 .githooks/pre-commit         refuse de committer des données client
 missions/                    vos relevés réels — hors dépôt
@@ -297,6 +298,10 @@ carte dans la page, un appel dans le rendu.
 | Couleurs | `js/theme.js` **et** `css/style.css` | `src/theme.py` **et** `assets/style.css` |
 | Granularités proposées | `GRANULARITIES` dans `js/data.js` | `src/data.py` |
 | Période affichée au démarrage | `adopt()` dans `js/app.js` | `filter_bar()` dans `src/components.py` |
+
+Après toute modification de `js/` ou `css/`, lancez
+`python3 scripts/bump_version.py` : servie en local, la page garde sinon ses
+anciens modules en cache et vos changements restent invisibles.
 
 Les couleurs de séries suivent une palette testée pour le daltonisme, attribuée
 dans un **ordre fixe** : un site garde sa couleur quand on filtre les autres.
