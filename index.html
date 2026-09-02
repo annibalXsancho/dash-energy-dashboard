@@ -8,7 +8,7 @@
 <!-- Icône d'onglet en URL de données : elle suit le fichier, donc le livrable
      autonome l'emporte avec lui sans requête ni fichier voisin. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%231a1a19'/%3E%3Cpath%20d='M5%2023h5v-9h6v13h6v-8h5'%20fill='none'%20stroke='%233987e5'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=5">
 <!-- plotly.js embarqué dans le dépôt (voir vendor/LISEZ-MOI.md) : la page
      fonctionne hors ligne et la version ne bouge pas sans qu'on le décide.
      Le lot « cartesian » suffit (1,5 Mo au lieu de 4,3 Mo). L'ordre compte :
@@ -105,9 +105,10 @@
         <label for="map-timestamp">Date et heure</label>
         <select id="map-timestamp"></select>
       </div>
-      <div class="tariff-field">
-        <label for="map-power">Puissance (kW)</label>
-        <select id="map-power"></select>
+      <div class="tariff-field mapper-powers">
+        <label id="map-power-label">Colonnes de puissance</label>
+        <div class="col-list" id="map-power-list" role="group" aria-labelledby="map-power-label"></div>
+        <p class="col-note" id="map-power-note"></p>
       </div>
       <div class="tariff-field">
         <label for="map-unit">Unité de puissance</label>
@@ -116,6 +117,7 @@
           <option value="W">watts (W)</option>
           <option value="MW">mégawatts (MW)</option>
         </select>
+        <p class="col-note" id="map-unit-note"></p>
       </div>
       <div class="tariff-field">
         <label for="map-site">Site</label>
@@ -193,6 +195,6 @@
   </footer>
 </div>
 
-<script type="module" src="js/app.js?v=3"></script>
+<script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

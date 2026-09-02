@@ -184,6 +184,36 @@ d'index kWh ne convient pas : il faut une **puissance**.
   jamais dans un livrable client.
 - **Google Sheets** : voir ci-dessous.
 
+### Un fichier avec plusieurs compteurs en colonnes
+
+C'est la forme habituelle d'un export de sous-comptage : une ligne par heure,
+**une colonne par compteur**.
+
+```
+[Date & Heure]    Site   FM Normale   FM Preferenziale   GENERALE CABINA   …
+01/01/2025 00:00  Ova        26 345             17 541            84 701   …
+```
+
+Chargez-le tel quel : la page repère les colonnes numériques et les propose
+**toutes cochées** dans une liste. Chaque colonne retenue devient une série —
+une couleur, une courbe, une part dans l'énergie empilée. Décochez ce qui n'est
+pas un compteur.
+
+> **Attention aux totaux.** Un tableau divisionnaire contient presque toujours
+> un compteur général *et* ses sous-compteurs. Les cocher ensemble compte la
+> consommation deux fois. Vérifiez l'additivité sur une ligne avant de choisir :
+> si `GENERALE = A + B + C`, cochez soit le général, soit les trois autres.
+
+Quand la colonne de site ne prend qu'une valeur (« Ova »), elle n'est pas
+répétée devant chaque nom de compteur ; si plusieurs sites coexistent, les
+séries s'appellent `site · compteur`.
+
+**L'unité sans intitulé.** Ces colonnes portent des noms de compteurs, jamais
+une unité. La page la déduit alors de l'ordre de grandeur — au-delà de 5 000,
+ce sont des watts, pas des kilowatts — et affiche sur quoi elle s'est fondée.
+Vérifiez ce champ : c'est le seul endroit où une erreur passe inaperçue en
+restant cohérente.
+
 ### Quand les intitulés ne sont pas les bons
 
 C'est le cas normal avec un fichier client. La page ne refuse pas le fichier :
@@ -242,7 +272,7 @@ désignation des colonnes :
 |---|---|
 | `data` | adresse du CSV (feuille publiée, fichier en ligne…) |
 | `t` | numéro de la colonne date/heure (0 = la première) |
-| `p` | numéro de la colonne de puissance |
+| `p` | colonne(s) de puissance — plusieurs se séparent par des virgules : `p=2,3,6` |
 | `s` | numéro de la colonne de site, ou `-1` s'il n'y en a pas |
 | `u` | unité : `W`, `kW` ou `MW` |
 | `n` | nom du site quand `s=-1` |

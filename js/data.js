@@ -136,14 +136,33 @@ export const UNITS = { W: 0.001, kW: 1, MW: 1000 };
 
 export function detectUnitFor(table, column) {
   if (!table || column < 0) return "kW";
-  return detectUnit(table.header[column] ?? "");
+  return detectUnit(table.header[column] ?? "", medianOf(table, column));
 }
 
-function detectUnit(headerCell) {
+/** Valeur médiane d'une colonne, sur un échantillon de lignes. */
+function medianOf(table, column) {
+  const values = [];
+  for (const row of table.rows.slice(0, 300)) {
+    const value = toNumber(row[column] ?? "");
+    if (!Number.isNaN(value) && value > 0) values.push(value);
+  }
+  if (!values.length) return null;
+  values.sort((a, b) => a - b);
+  return values[Math.floor(values.length / 2)];
+}
+
+/** Unité de la colonne : d'abord son intitulé, sinon l'ordre de grandeur.
+ *
+ *  Un tableau de sous-comptage nomme ses colonnes d'après les compteurs
+ *  (« FM Normale ») sans jamais dire l'unité. Or 26 345 se lit sans hésitation :
+ *  ce sont des watts — 26 MW n'existent pas sur un tableau divisionnaire. Le
+ *  seuil est prudent (5 000) et le champ reste modifiable à l'écran. */
+function detectUnit(headerCell, median = null) {
   const h = String(headerCell).toLowerCase();
   if (/\bmw\b|\[mw\]|\(mw\)/.test(h)) return "MW";
   if (/\bkw\b|\[kw\]|\(kw\)|_kw/.test(h)) return "kW";
   if (/\[w\]|\(w\)|\bw\b|watt/.test(h)) return "W";
+  if (median !== null && median >= 5000) return "W";
   return "kW";
 }
 
@@ -181,30 +200,48 @@ export function autoMap(table) {
     timestamp = find((h, i) => looksLikeTime(table, i));
   }
 
-  // On évite les colonnes d'ÉNERGIE (kWh) : ce tableau de bord attend une
-  // PUISSANCE, et confondre les deux fausserait tout d'un facteur « durée ».
-  const isEnergy = (h) => /kwh|k?wh\b|énergie|energie|consommation/.test(h);
-  let power = find((h) => h === "power_kw");
-  if (power === -1) power = find((h) => /puissance|power/.test(h) && !isEnergy(h));
-  if (power === -1) {
-    power = find((h) => /\bkw\b|\(kw\)|\[kw\]|_kw|\bmw\b|\[mw\]|\[w\]|\(w\)|\bw\b/.test(h)
-      && !isEnergy(h));
-  }
-  // « site A P [W] » : dans les exports de compteurs, la puissance active
-  // s'abrège en P isolé.
-  if (power === -1) power = find((h) => /\bp\b/.test(h) && !isEnergy(h));
-  if (power === -1) {
-    power = find((h, i) => i !== timestamp && !isEnergy(h) && looksNumeric(table, i));
-  }
-
   let site = find((h) => h === "site");
   if (site === -1) {
     site = find((h, i) =>
       i !== timestamp
-      && i !== power
       && /site|lieu|compteur|meter|point|pdl|prm|bâtiment|batiment|nom/.test(h)
       && distinctCount(table, i) <= 40);
   }
+
+  // On écarte les colonnes d'ÉNERGIE (kWh) : ce tableau de bord attend une
+  // PUISSANCE, et confondre les deux fausserait tout d'un facteur « durée ».
+  const isEnergy = (h) => /kwh|k?wh\b|énergie|energie|consommation/.test(h);
+  const isPowerName = (h) => /puissance|power/.test(h)
+    || /\bkw\b|\(kw\)|\[kw\]|_kw|\bmw\b|\[mw\]|\[w\]|\(w\)|\bw\b/.test(h)
+    || /\bp\b/.test(h); // « site A P [W] » : la puissance active s'abrège en P
+
+  // Format LARGE (une colonne par compteur) : on retient toutes les colonnes
+  // numériques plausibles, pas seulement la première.
+  let powers = lower
+    .map((h, i) => ({ h, i }))
+    .filter(({ h, i }) => i !== timestamp && !isEnergy(h) && isPowerName(h) && looksNumeric(table, i))
+    .map(({ i }) => i);
+
+  if (!powers.length) {
+    const exact = lower.indexOf("power_kw");
+    if (exact >= 0) powers = [exact];
+  }
+  if (!powers.length) {
+    // Aucun intitulé ne parle d'unité : c'est le cas d'un tableau de
+    // sous-comptage, dont les colonnes portent des noms de compteurs
+    // (« FM Normale », « Luce preferenziale »…). On propose alors toutes les
+    // colonnes numériques qui ne sont ni des repères de temps, ni des
+    // grandeurs manifestement étrangères — à l'utilisateur de décocher.
+    const isTimePart = (h) => /année|annee|mois|jour|heure|year|month|day|hour|date|time/.test(h);
+    const isOther = (h) => /temp|°c|cos ?phi|humid|prix|price|tarif|index|dju|cdd|hdd/.test(h);
+    const candidates = lower
+      .map((h, i) => ({ h, i }))
+      .filter(({ h, i }) => i !== timestamp && i !== site && !isEnergy(h) && !isTimePart(h)
+        && !isOther(h) && looksNumeric(table, i))
+      .map(({ i }) => i);
+    if (candidates.length) powers = candidates;
+  }
+  const power = powers.length ? powers[0] : -1;
 
   // Sans colonne de site, l'en-tête de la puissance donne le meilleur nom
   // disponible : « site A P [W] » -> « site A P ».
@@ -212,25 +249,49 @@ export function autoMap(table) {
     ? String(table.header[power]).replace(/[[(][^\])]*[\])]/g, "").trim()
     : "";
 
-  return { timestamp, power, site, unit: detectUnit(table.header[power] ?? ""), siteName: suggestedName };
+  return {
+    timestamp,
+    power: powers.length > 1 ? powers : power,
+    site,
+    unit: detectUnit(table.header[power] ?? "", medianOf(table, power)),
+    siteName: suggestedName,
+  };
 }
 
 /** Applique une désignation de colonnes et produit les mesures. */
 export function toMeasures(table, mapping) {
-  if (mapping.timestamp === -1 || mapping.power === -1) {
+  const powers = (Array.isArray(mapping.power) ? mapping.power : [mapping.power])
+    .filter((index) => index >= 0);
+  if (mapping.timestamp === -1 || !powers.length) {
     throw new DataError("Il faut au moins une colonne de date et une colonne de puissance.");
   }
   const fallbackName = (mapping.siteName || "").trim() || "Site";
   const factor = UNITS[mapping.unit] ?? 1;
+
+  // Un fichier de sous-comptage porte souvent une colonne de site à valeur
+  // unique (« Ova ») : la répéter devant chaque compteur allongerait les
+  // légendes sans rien apprendre. On ne préfixe que si le site varie vraiment.
+  const siteCell = (cells) =>
+    String(cells[mapping.site] ?? "").replace(/^"|"$/g, "").trim();
+  const varyingSite = mapping.site >= 0
+    && new Set(table.rows.slice(0, 2000).map(siteCell)).size > 1;
+
   const rows = [];
   for (const cells of table.rows) {
     const t = toTime(cells[mapping.timestamp] ?? "", true);
-    const kw = toNumber(cells[mapping.power] ?? "") * factor;
-    if (Number.isNaN(t) || Number.isNaN(kw)) continue; // ligne inexploitable
-    const site = mapping.site >= 0
-      ? String(cells[mapping.site] ?? "").replace(/^"|"$/g, "").trim() || fallbackName
-      : fallbackName;
-    rows.push({ t, site, kw });
+    if (Number.isNaN(t)) continue; // ligne inexploitable
+    for (const column of powers) {
+      const kw = toNumber(cells[column] ?? "") * factor;
+      if (Number.isNaN(kw)) continue;
+      let name;
+      if (powers.length > 1) {
+        const meter = String(table.header[column] ?? `Colonne ${column + 1}`).trim();
+        name = varyingSite ? `${siteCell(cells)} · ${meter}` : meter;
+      } else {
+        name = mapping.site >= 0 ? siteCell(cells) || fallbackName : fallbackName;
+      }
+      rows.push({ t, site: name, kw });
+    }
   }
   if (!rows.length) {
     throw new DataError(

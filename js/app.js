@@ -1,11 +1,11 @@
 // Assemblage : état, contrôles, rendu. C'est le seul module qui touche au DOM
 // et le seul qui connaisse à la fois les données et les figures.
 
-import * as data from "./data.js?v=3";
-import * as figures from "./figures.js?v=3";
-import * as theme from "./theme.js?v=3";
-import * as tariff from "./tariff.js?v=3";
-import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=3";
+import * as data from "./data.js?v=5";
+import * as figures from "./figures.js?v=5";
+import * as theme from "./theme.js?v=5";
+import * as tariff from "./tariff.js?v=5";
+import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=5";
 
 const DEFAULT_CSV = "data/sample_energy.csv";
 const SHEETJS_SRC = "vendor/xlsx-0.20.3.full.min.js";
@@ -46,8 +46,10 @@ const nodes = {
   mapperIntro: el("mapper-intro"),
   mapperTable: el("mapper-table"),
   mapTimestamp: el("map-timestamp"),
-  mapPower: el("map-power"),
+  mapPowerList: el("map-power-list"),
+  mapPowerNote: el("map-power-note"),
   mapUnit: el("map-unit"),
+  mapUnitNote: el("map-unit-note"),
   mapSite: el("map-site"),
   mapName: el("map-name"),
   mapNameField: el("map-name-field"),
@@ -214,14 +216,65 @@ function loadText(text, source) {
   }
 }
 
+function checkedPowers() {
+  return [...nodes.mapPowerList.querySelectorAll("input:checked")].map((box) => Number(box.value));
+}
+
 function currentMapping() {
+  const powers = checkedPowers();
   return {
     timestamp: Number(nodes.mapTimestamp.value),
-    power: Number(nodes.mapPower.value),
+    power: powers.length === 1 ? powers[0] : powers,
     site: Number(nodes.mapSite.value),
     unit: nodes.mapUnit.value,
     siteName: nodes.mapName.value,
   };
+}
+
+/** Liste à cocher des colonnes de puissance : un fichier de sous-comptage en
+ *  porte une par compteur, et chacune deviendra une série du tableau de bord. */
+function fillPowerList(header, selected) {
+  const chosen = new Set(Array.isArray(selected) ? selected : [selected]);
+  nodes.mapPowerList.replaceChildren();
+  header.forEach((name, index) => {
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.value = String(index);
+    box.checked = chosen.has(index);
+    label.classList.toggle("is-on", box.checked);
+    label.append(box, document.createTextNode(name || `Colonne ${index + 1}`));
+    box.addEventListener("change", () => {
+      label.classList.toggle("is-on", box.checked);
+      updatePowerNote();
+      renderPreview();
+    });
+    nodes.mapPowerList.append(label);
+  });
+  updatePowerNote();
+}
+
+function updatePowerNote() {
+  const count = checkedPowers().length;
+  if (count === 0) {
+    nodes.mapPowerNote.textContent = "Cochez au moins une colonne.";
+  } else if (count === 1) {
+    nodes.mapPowerNote.textContent = "Une seule courbe sera tracée.";
+  } else {
+    nodes.mapPowerNote.textContent = `${count} compteurs : un par courbe, et leur somme`
+      + " pour les indicateurs. Ne cochez pas en même temps un compteur général et"
+      + " ceux qu'il totalise — la consommation serait comptée deux fois.";
+  }
+  // L'unité suit la première colonne cochée.
+  const first = checkedPowers()[0];
+  if (first !== undefined && pending) {
+    nodes.mapUnit.value = data.detectUnitFor(pending.table, first);
+    const echantillon = pending.table.rows[0]?.[first];
+    nodes.mapUnitNote.textContent = echantillon
+      ? `déduite de « ${String(pending.table.header[first]).trim()} » et de l'ordre de grandeur `
+        + `(${echantillon}) — corrigez si besoin`
+      : "";
+  }
 }
 
 function fillSelect(select, header, selected, noneLabel) {
@@ -246,7 +299,8 @@ function renderPreview() {
   if (!pending) return;
   const { header, rows } = pending.table;
   const mapping = currentMapping();
-  const used = new Set([mapping.timestamp, mapping.power, mapping.site].filter((v) => v >= 0));
+  const powers = Array.isArray(mapping.power) ? mapping.power : [mapping.power];
+  const used = new Set([mapping.timestamp, ...powers, mapping.site].filter((v) => v >= 0));
   const head = document.createElement("tr");
   header.forEach((name, index) => {
     const th = document.createElement("th");
@@ -265,7 +319,8 @@ function renderPreview() {
     return tr;
   });
   nodes.mapperTable.replaceChildren(head, ...body);
-  nodes.mapNameField.hidden = Number(nodes.mapSite.value) >= 0;
+  // Avec plusieurs compteurs, les noms viennent des intitulés de colonnes.
+  nodes.mapNameField.hidden = Number(nodes.mapSite.value) >= 0 || powers.length > 1;
 }
 
 function openMapper(table, suggestion, source) {
@@ -273,7 +328,7 @@ function openMapper(table, suggestion, source) {
   nodes.mapperIntro.textContent = `${source} — ${fmt(table.rows.length)} lignes.`
     + " Les intitulés ne sont pas ceux attendus : indiquez quelle colonne porte quoi.";
   fillSelect(nodes.mapTimestamp, table.header, suggestion.timestamp);
-  fillSelect(nodes.mapPower, table.header, suggestion.power);
+  fillPowerList(table.header, suggestion.power);
   fillSelect(nodes.mapSite, table.header, suggestion.site, "aucune — un seul site");
   nodes.mapUnit.value = suggestion.unit || "kW";
   nodes.mapName.value = suggestion.siteName || source.replace(/\.[^.]+$/, "");
@@ -318,9 +373,13 @@ function mappingFromParams(params) {
     const value = Number(params.get(key));
     return Number.isFinite(value) ? value : fallback;
   };
+  const powers = String(params.get("p"))
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((value) => Number.isFinite(value) && value >= 0);
   return {
     timestamp: num("t", 0),
-    power: num("p", -1),
+    power: powers.length > 1 ? powers : (powers[0] ?? -1),
     site: num("s", -1),
     unit: params.get("u") || "kW",
     siteName: params.get("n") || "",
@@ -527,13 +586,9 @@ function wireControls() {
     say("Lien oublié — la page repartira des données de démonstration.", "is-ok");
   });
 
-  for (const select of [nodes.mapTimestamp, nodes.mapPower, nodes.mapSite]) {
+  for (const select of [nodes.mapTimestamp, nodes.mapSite]) {
     select.addEventListener("change", renderPreview);
   }
-  // Changer de colonne de puissance peut changer l'unité qu'on en déduit.
-  nodes.mapPower.addEventListener("change", () => {
-    nodes.mapUnit.value = data.detectUnitFor(pending?.table, Number(nodes.mapPower.value));
-  });
   el("map-apply").addEventListener("click", applyMapper);
   el("map-cancel").addEventListener("click", () => {
     closeMapper();
