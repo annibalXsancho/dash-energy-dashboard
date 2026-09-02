@@ -16,21 +16,44 @@ mêmes indicateurs, mêmes graphiques, mêmes couleurs, mêmes calculs :
 
 ---
 
-## La page web
+## La page web — trois façons d'y accéder
 
-En ligne : **https://annibalxsancho.github.io/dash-energy-dashboard/**
-*(à activer une fois : dépôt → Settings → Pages → Source « Deploy from a branch », branche `main`, dossier `/ (root)`).*
+**1. En ligne, depuis n'importe quel appareil**
 
-Une fois en ligne, la mettre à jour se résume à `git push`.
+**https://annibalxsancho.github.io/dash-energy-dashboard/**
 
-En local, il lui faut une adresse `http` — ouverte par double-clic (`file://`),
-la page ne peut pas lire son fichier de données :
+À activer une fois : dépôt → Settings → Pages → Source « Deploy from a branch »,
+branche `main`, dossier `/ (root)`. Ensuite, `git push` met la page à jour.
+C'est l'adresse à mettre en favori.
+
+**2. Sur ce Mac, sans rien taper**
+
+Double-cliquez **`Ouvrir le tableau de bord.command`** dans le Finder : une
+fenêtre de Terminal s'ouvre, le navigateur affiche le tableau de bord. Fermez
+la fenêtre pour tout arrêter — le serveur meurt avec elle.
+
+C'est la voie à privilégier pour travailler sur des données client : rien ne
+transite par Internet. *(Si macOS refuse de l'ouvrir après un téléchargement du
+dépôt en ZIP : clic droit sur le fichier → Ouvrir → Ouvrir.)*
+
+Pourquoi un serveur plutôt qu'un simple double-clic sur `index.html` ? Une page
+ouverte en `file://` n'a pas le droit de lire les fichiers voisins, dont le CSV.
+Le serveur n'écoute que cet ordinateur (127.0.0.1) et ne sert que ce dossier.
+
+L'équivalent au clavier, si vous préférez :
 
 ```bash
 cd ~/Desktop/dash-energy-dashboard && python3 -m http.server 4180
 ```
 
 puis **http://127.0.0.1:4180**.
+
+**3. Sans aucun serveur : un fichier autonome**
+
+`scripts/build_export.py` (voir plus bas) fabrique un `.html` qui contient tout,
+données comprises. Celui-là s'ouvre bel et bien par double-clic, hors ligne, et
+s'archive ou s'envoie tel quel. C'est la forme du livrable client — et c'est
+aussi la bonne façon de figer une analyse pour vous-même.
 
 **Pointer la page vers d'autres données**, sans toucher au code : ajouter
 `?data=` suivi de l'adresse d'un CSV, par exemple
@@ -190,6 +213,7 @@ app.py                       l'application Dash
 src/theme.py  src/data.py  src/figures.py  src/components.py  src/callbacks.py
 assets/style.css             le style de la version Dash
 
+Ouvrir le tableau de bord.command   lanceur : double-clic depuis le Finder
 js/tariff.js                 prix, heures creuses, puissance souscrite, dépassements
 vendor/                      plotly embarqué (voir vendor/LISEZ-MOI.md)
 scripts/build_export.py      fabrique un livrable HTML autonome
