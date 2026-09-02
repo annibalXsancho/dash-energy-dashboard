@@ -80,42 +80,132 @@ function toTime(text) {
 
 const REQUIRED = ["timestamp", "site", "power_kw"];
 
-/** Texte CSV -> tableau de mesures { t, site, kw }, trié dans le temps. */
-export function parse(text) {
+/** Levée quand le fichier est lisible mais que ses colonnes ne portent pas les
+ *  noms attendus : l'interface propose alors de les désigner à la main.
+ *  Un export client n'a jamais les bons intitulés — c'est le cas NORMAL, pas
+ *  une erreur. */
+export class MappingNeeded extends Error {
+  constructor(table, suggestion) {
+    super("Colonnes à désigner");
+    this.table = table;
+    this.suggestion = suggestion;
+  }
+}
+
+/** Découpe le texte en en-tête + lignes de cellules, sans rien interpréter. */
+export function readTable(text) {
   const clean = text.replace(/^\uFEFF/, "").trim();
   if (!clean) throw new DataError("Fichier vide.");
   const lines = clean.split(/\r?\n/);
   const sep = sniff(lines[0]);
-  const header = splitLine(lines[0], sep).map((h) => h.toLowerCase().replace(/^"|"$/g, ""));
-
-  const index = {};
-  for (const name of REQUIRED) index[name] = header.indexOf(name);
-  const missing = REQUIRED.filter((name) => index[name] === -1);
-  if (missing.length === REQUIRED.length) {
-    throw new DataError(
-      "Aucune des colonnes attendues n'a été trouvée. La première ligne du fichier "
-      + "doit nommer les colonnes : timestamp, site, power_kw.",
-    );
-  }
-  if (missing.length) {
-    throw new DataError(
-      `Colonne manquante : ${missing.join(", ")}. Attendu : timestamp, site, power_kw.`,
-    );
-  }
-
+  const header = splitLine(lines[0], sep).map((h) => h.replace(/^"|"$/g, "").trim());
   const rows = [];
   for (let i = 1; i < lines.length; i += 1) {
-    if (!lines[i]) continue;
-    const cells = splitLine(lines[i], sep);
-    const t = toTime(cells[index.timestamp]);
-    const kw = toNumber(cells[index.power_kw]);
-    const site = (cells[index.site] || "").replace(/^"|"$/g, "");
-    if (Number.isNaN(t) || Number.isNaN(kw) || !site) continue; // ligne inexploitable
+    if (lines[i].trim()) rows.push(splitLine(lines[i], sep));
+  }
+  if (!rows.length) throw new DataError("Le fichier ne contient aucune ligne de données.");
+  return { header, rows };
+}
+
+const SAMPLE = 40; // lignes examinées pour deviner la nature d'une colonne
+
+function looksLikeTime(table, column) {
+  let hits = 0;
+  for (const row of table.rows.slice(0, SAMPLE)) {
+    if (!Number.isNaN(toTime(row[column] ?? ""))) hits += 1;
+  }
+  return hits >= Math.min(3, table.rows.length);
+}
+
+function looksNumeric(table, column) {
+  let hits = 0;
+  for (const row of table.rows.slice(0, SAMPLE)) {
+    const value = toNumber(row[column] ?? "");
+    if (!Number.isNaN(value)) hits += 1;
+  }
+  return hits >= Math.min(3, table.rows.length);
+}
+
+function distinctCount(table, column) {
+  const seen = new Set();
+  for (const row of table.rows.slice(0, 500)) seen.add(row[column]);
+  return seen.size;
+}
+
+/** Devine quelle colonne joue quel rôle. Renvoie -1 quand rien ne convient. */
+export function autoMap(table) {
+  const lower = table.header.map((h) => h.toLowerCase());
+  const find = (test) => lower.findIndex((h, i) => test(h, i));
+
+  let timestamp = find((h) => h === "timestamp");
+  if (timestamp === -1) timestamp = find((h) => /date|heure|time|horodat|période|periode/.test(h));
+  if (timestamp === -1 || !looksLikeTime(table, timestamp)) {
+    timestamp = find((h, i) => looksLikeTime(table, i));
+  }
+
+  // On évite les colonnes d'ÉNERGIE (kWh) : ce tableau de bord attend une
+  // PUISSANCE, et confondre les deux fausserait tout d'un facteur « durée ».
+  const isEnergy = (h) => /kwh|k?wh\b|énergie|energie|consommation/.test(h);
+  let power = find((h) => h === "power_kw");
+  if (power === -1) power = find((h) => /puissance|power/.test(h) && !isEnergy(h));
+  if (power === -1) power = find((h) => /\bkw\b|\(kw\)|_kw/.test(h) && !isEnergy(h));
+  if (power === -1) {
+    power = find((h, i) => i !== timestamp && !isEnergy(h) && looksNumeric(table, i));
+  }
+
+  let site = find((h) => h === "site");
+  if (site === -1) {
+    site = find((h, i) =>
+      i !== timestamp
+      && i !== power
+      && /site|lieu|compteur|meter|point|pdl|prm|bâtiment|batiment|nom/.test(h)
+      && distinctCount(table, i) <= 40);
+  }
+
+  return { timestamp, power, site, siteName: "" };
+}
+
+/** Applique une désignation de colonnes et produit les mesures. */
+export function toMeasures(table, mapping) {
+  if (mapping.timestamp === -1 || mapping.power === -1) {
+    throw new DataError("Il faut au moins une colonne de date et une colonne de puissance.");
+  }
+  const fallbackName = (mapping.siteName || "").trim() || "Site";
+  const rows = [];
+  for (const cells of table.rows) {
+    const t = toTime(cells[mapping.timestamp] ?? "");
+    const kw = toNumber(cells[mapping.power] ?? "");
+    if (Number.isNaN(t) || Number.isNaN(kw)) continue; // ligne inexploitable
+    const site = mapping.site >= 0
+      ? String(cells[mapping.site] ?? "").replace(/^"|"$/g, "").trim() || fallbackName
+      : fallbackName;
     rows.push({ t, site, kw });
   }
-  if (!rows.length) throw new DataError("Aucune ligne exploitable après nettoyage.");
+  if (!rows.length) {
+    throw new DataError(
+      "Aucune ligne exploitable : vérifiez les colonnes désignées (dates lisibles, puissances numériques).",
+    );
+  }
   rows.sort((a, b) => a.t - b.t);
   return rows;
+}
+
+/** Texte CSV -> mesures. Lève MappingNeeded si les colonnes attendues manquent. */
+export function parse(text, fallbackSiteName = "") {
+  const table = readTable(text);
+  const lower = table.header.map((h) => h.toLowerCase());
+  const canonical = REQUIRED.every((name) => lower.includes(name));
+  if (canonical) {
+    return toMeasures(table, {
+      timestamp: lower.indexOf("timestamp"),
+      power: lower.indexOf("power_kw"),
+      site: lower.indexOf("site"),
+      siteName: fallbackSiteName,
+    });
+  }
+  const suggestion = autoMap(table);
+  suggestion.siteName = fallbackSiteName;
+  throw new MappingNeeded(table, suggestion);
 }
 
 // --------------------------------------------------------------------------

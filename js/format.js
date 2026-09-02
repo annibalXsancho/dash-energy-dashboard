@@ -43,6 +43,12 @@ export function stampTable(date, freq) {
   return `${d}/${date.getFullYear()}`;
 }
 
+/** Horodatage complet en heure locale : « 2026-08-31T14:30:00 ».
+ *  Sert à réécrire un relevé au format canonique du tableau de bord. */
+export function isoStamp(date) {
+  return `${isoDay(date)}T${two(date.getHours())}:${two(date.getMinutes())}:${two(date.getSeconds())}`;
+}
+
 /** Date au format d'un champ <input type="date"> (aaaa-mm-jj, heure locale). */
 export function isoDay(date) {
   return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;

@@ -120,6 +120,18 @@ def main() -> None:
 
     if not args.csv.exists():
         raise SystemExit(f"Relevé introuvable : {args.csv}")
+
+    # Le livrable n'a pas d'interface de rattrapage : ses données doivent déjà
+    # porter les bons intitulés. Sinon le client ouvrirait un formulaire de
+    # désignation de colonnes — exactement ce qu'on ne veut pas lui montrer.
+    header = args.csv.open(encoding="utf-8", errors="replace").readline().lower()
+    missing = [c for c in ("timestamp", "site", "power_kw") if c not in header]
+    if missing:
+        raise SystemExit(
+            f"Colonnes absentes de l'en-tête : {', '.join(missing)}.\n"
+            "Ouvrez le relevé dans le tableau de bord, désignez les colonnes, puis\n"
+            "cliquez « CSV normalisé » : c'est ce fichier-là qu'on exporte."
+        )
     hc_start, hc_end = (int(x) for x in args.hc.split("-"))
 
     today = date.today()

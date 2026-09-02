@@ -57,10 +57,27 @@
     <div class="filter filter--data">
       <span class="eyebrow">Données</span>
       <div class="btn-row">
-        <label class="btn btn--tonal" for="file-input">Charger un CSV</label>
-        <input type="file" id="file-input" accept=".csv,.txt,text/csv" hidden>
+        <label class="btn btn--tonal" for="file-input">Charger un fichier</label>
+        <input type="file" id="file-input" accept=".csv,.txt,.xlsx,.xls" hidden>
+        <button class="btn btn--ghost" id="link-toggle">Lien…</button>
+        <button class="btn btn--ghost" id="export-csv" title="Enregistre les données affichées aux colonnes attendues">CSV normalisé</button>
         <button class="btn btn--ghost" id="reset-data">Démo</button>
       </div>
+    </div>
+
+    <div class="filter filter--link" id="link-row" hidden>
+      <label class="eyebrow" for="link-input">Adresse d'un CSV ou d'un Google Sheets publié</label>
+      <div class="field-row">
+        <input type="url" id="link-input" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv">
+        <button class="btn btn--tonal" id="link-load">Charger</button>
+        <button class="btn btn--ghost" id="link-forget" hidden>Oublier</button>
+      </div>
+      <p class="link-note">
+        L'adresse est mémorisée et relue à chaque ouverture de la page. Dans Google Sheets :
+        <strong>Fichier → Partager → Publier sur le web → CSV</strong>.
+        Une feuille publiée est <strong>lisible par quiconque a le lien</strong> :
+        à réserver à vos propres données, jamais à celles d'un client.
+      </p>
     </div>
   </section>
 
@@ -75,6 +92,34 @@
   </details>
 
   <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+
+  <section class="mapper" id="mapper" hidden aria-labelledby="mapper-title">
+    <h2 class="card-title" id="mapper-title">Désignez les colonnes</h2>
+    <p class="card-hint" id="mapper-intro"></p>
+    <div class="mapper-preview"><table id="mapper-table"></table></div>
+    <div class="mapper-fields">
+      <div class="tariff-field">
+        <label for="map-timestamp">Date et heure</label>
+        <select id="map-timestamp"></select>
+      </div>
+      <div class="tariff-field">
+        <label for="map-power">Puissance (kW)</label>
+        <select id="map-power"></select>
+      </div>
+      <div class="tariff-field">
+        <label for="map-site">Site</label>
+        <select id="map-site"></select>
+      </div>
+      <div class="tariff-field" id="map-name-field">
+        <label for="map-name">Nom du site</label>
+        <input type="text" id="map-name" placeholder="Usine Nord">
+      </div>
+    </div>
+    <div class="btn-row mapper-actions">
+      <button class="btn btn--tonal" id="map-apply">Utiliser ces colonnes</button>
+      <button class="btn btn--ghost" id="map-cancel">Annuler</button>
+    </div>
+  </section>
 
   <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
 

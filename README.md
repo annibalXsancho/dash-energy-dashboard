@@ -152,7 +152,10 @@ pour refaire une facture.
 
 ## Vos données
 
-Un seul fichier CSV, trois colonnes :
+### Ce qu'il faut, au fond
+
+Trois informations par mesure : **quand**, **où**, **combien de kW**. Le reste
+est de la tuyauterie que la page prend en charge.
 
 ```csv
 timestamp,site,power_kw
@@ -164,19 +167,65 @@ timestamp,site,power_kw
 | Colonne | Rôle |
 |---|---|
 | `timestamp` | date et heure de la mesure |
-| `site` | nom du site, de l'atelier ou du compteur — c'est ce qui sépare les couleurs |
+| `site` | site, atelier ou compteur — c'est ce qui sépare les couleurs |
 | `power_kw` | puissance moyenne sur le pas de temps, en kilowatts |
-
-L'ordre des colonnes est libre et toute colonne supplémentaire est ignorée. Le
-séparateur (`,`, `;` ou tabulation) est **deviné**, les dates françaises
-(`31/08/2026 14:30`) et l'écriture française des nombres (`1 234,5`) sont
-acceptées : **un export Excel francophone passe directement**.
 
 Le pas de temps (15 min, 1 h…) est **déduit** de l'écart médian entre deux
 mesures, et **l'énergie n'est jamais lue dans le fichier, elle est calculée** :
-`énergie (kWh) = puissance (kW) × durée du pas (h)`.
+`énergie (kWh) = puissance (kW) × durée du pas (h)`. C'est pourquoi une colonne
+d'index kWh ne convient pas : il faut une **puissance**.
 
-Les deux versions acceptent le même fichier, avec les mêmes messages d'erreur.
+### Formats acceptés
+
+- **CSV / TSV** : séparateur (`,` `;` tabulation) deviné, dates françaises
+  (`31/08/2026 14:30`) ou ISO, nombres à la française (`1 234,5`).
+- **Excel** (`.xlsx`, `.xls`) : lu directement, **première feuille du classeur**.
+  La bibliothèque de lecture (1 Mo) n'est chargée qu'à ce moment-là, et n'entre
+  jamais dans un livrable client.
+- **Google Sheets** : voir ci-dessous.
+
+### Quand les intitulés ne sont pas les bons
+
+C'est le cas normal avec un fichier client. La page ne refuse pas le fichier :
+elle affiche un **aperçu des premières lignes** et vous fait désigner les trois
+colonnes dans des listes déroulantes. Les propositions sont déjà remplies —
+elle repère les colonnes de dates, évite les colonnes d'**énergie** (`kWh`,
+`index`) quand elle cherche une puissance, et reconnaît une colonne de site à
+son faible nombre de valeurs distinctes.
+
+Deux détails qui font gagner du temps :
+
+- si le fichier ne contient **qu'un seul compteur** et aucune colonne de site,
+  choisissez « aucune — un seul site » et donnez-lui un nom ;
+- la désignation est **mémorisée par forme d'en-tête** : le même export, le mois
+  suivant, se charge sans rien redemander.
+
+Le bouton **« CSV normalisé »** enregistre les données affichées aux trois
+colonnes canoniques. C'est ce fichier-là qu'on range dans `missions/` et qu'on
+donne à `build_export.py` (qui refuse tout fichier non normalisé, pour qu'un
+client n'ouvre jamais un formulaire de désignation de colonnes).
+
+### Brancher un Google Sheets
+
+Bouton **« Lien… »**, coller l'adresse, **Charger**. L'adresse est mémorisée :
+à chaque ouverture de la page, les données sont **relues à la source** — c'est
+la « connexion » au sens courant du terme. Le bouton **Démo** l'oublie.
+
+Pour qu'une feuille soit lisible par une page web, elle doit être **publiée** :
+dans Google Sheets, `Fichier → Partager → Publier sur le web → CSV`. Une adresse
+d'édition ordinaire (`.../edit#gid=0`) est tentée en `export?format=csv`, mais
+Google la refuse le plus souvent — le message vous renvoie alors vers la
+publication.
+
+> **Une feuille publiée est lisible par quiconque connaît le lien.** Pour vos
+> propres relevés, c'est commode. Pour ceux d'un client, **jamais** : téléchargez
+> le fichier et chargez-le localement, ou travaillez depuis le lanceur hors ligne.
+
+Le paramètre d'adresse `?data=<url>` fait la même chose sans mémoriser, pratique
+pour un signet dédié à une mission.
+
+Les deux versions du tableau de bord acceptent le même fichier ; en revanche la
+désignation de colonnes, l'Excel et les liens n'existent que dans la page web.
 
 ---
 
@@ -215,7 +264,7 @@ assets/style.css             le style de la version Dash
 
 Ouvrir le tableau de bord.command   lanceur : double-clic depuis le Finder
 js/tariff.js                 prix, heures creuses, puissance souscrite, dépassements
-vendor/                      plotly embarqué (voir vendor/LISEZ-MOI.md)
+vendor/                      plotly + lecteur Excel embarqués (voir vendor/LISEZ-MOI.md)
 scripts/build_export.py      fabrique un livrable HTML autonome
 scripts/generate_sample_data.py  regénère le jeu de démonstration
 .githooks/pre-commit         refuse de committer des données client

@@ -5,9 +5,12 @@ import * as data from "./data.js";
 import * as figures from "./figures.js";
 import * as theme from "./theme.js";
 import * as tariff from "./tariff.js";
-import { fmt, humanEnergy, stampLong, stampTable, isoDay } from "./format.js";
+import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js";
 
 const DEFAULT_CSV = "data/sample_energy.csv";
+const SHEETJS_SRC = "vendor/xlsx-0.20.3.full.min.js";
+const LINK_KEY = "energie.lien.v1";
+const MAPPINGS_KEY = "energie.colonnes.v1";
 const TABLE_ROW_CAP = 500;
 
 // L'énergie se lit mieux par tranche large : jamais plus fin que l'heure.
@@ -34,6 +37,20 @@ const nodes = {
   file: el("file-input"),
   reset: el("reset-data"),
   tariffFields: el("tariff-fields"),
+  linkRow: el("link-row"),
+  linkToggle: el("link-toggle"),
+  linkInput: el("link-input"),
+  linkLoad: el("link-load"),
+  linkForget: el("link-forget"),
+  mapper: el("mapper"),
+  mapperIntro: el("mapper-intro"),
+  mapperTable: el("mapper-table"),
+  mapTimestamp: el("map-timestamp"),
+  mapPower: el("map-power"),
+  mapSite: el("map-site"),
+  mapName: el("map-name"),
+  mapNameField: el("map-name-field"),
+  exportCsv: el("export-csv"),
   tableBody: document.querySelector("#data-table tbody"),
   tableNote: el("table-note"),
 };
@@ -93,7 +110,8 @@ function applyExportConfig(config) {
   document.querySelector(".page-footer").prepend(note);
 }
 
-async function loadFromUrl(url) {
+/** Télécharge un fichier texte ; l'interprétation revient à loadText. */
+async function fetchText(url) {
   let response;
   try {
     response = await fetch(url);
@@ -107,8 +125,236 @@ async function loadFromUrl(url) {
     );
   }
   if (!response.ok) throw new data.DataError(`Fichier introuvable (${response.status}) : ${url}`);
-  const text = await response.text();
-  return new data.Dataset(data.parse(text), url.split("/").pop());
+  return response.text();
+}
+
+// --------------------------------------------------------------------------
+// Fichiers Excel, liens, désignation des colonnes
+// --------------------------------------------------------------------------
+/** Charge SheetJS à la demande : un classeur Excel est un ZIP de XML, il faut
+ *  une bibliothèque pour le lire. Un mégaoctet qu'on ne fait payer qu'à ceux
+ *  qui ouvrent un .xlsx — et jamais au livrable client. */
+async function ensureSheetJs() {
+  if (window.XLSX) return;
+  await new Promise((resolve, reject) => {
+    const tag = document.createElement("script");
+    tag.src = SHEETJS_SRC;
+    tag.onload = resolve;
+    tag.onerror = () => reject(new Error(
+      "lecteur Excel introuvable. Enregistrez la feuille en CSV depuis Excel, puis rechargez-la.",
+    ));
+    document.head.append(tag);
+  });
+}
+
+/** Première feuille du classeur, convertie en CSV pour rejoindre le chemin normal. */
+async function spreadsheetToCsv(file) {
+  await ensureSheetJs();
+  const book = window.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  const name = book.SheetNames[0];
+  const sheet = name && book.Sheets[name];
+  if (!sheet) throw new Error("classeur vide.");
+  return { csv: window.XLSX.utils.sheet_to_csv(sheet, { dateNF: "yyyy-mm-dd hh:mm:ss" }), name };
+}
+
+const signature = (header) => header.join("|").toLowerCase();
+
+function readMappings() {
+  try {
+    return JSON.parse(localStorage.getItem(MAPPINGS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** Mémorise la désignation par empreinte d'en-tête : le même export, le mois
+ *  suivant, passe sans repasser par le formulaire. */
+function rememberMapping(header, mapping) {
+  try {
+    const all = readMappings();
+    all[signature(header)] = mapping;
+    localStorage.setItem(MAPPINGS_KEY, JSON.stringify(all));
+  } catch {
+    /* navigation privée : tant pis, on redemandera */
+  }
+}
+
+let pending = null; // table en attente de désignation
+
+/** Point d'entrée unique : un texte CSV devient un jeu de données affiché,
+ *  ou ouvre le formulaire de désignation des colonnes. */
+function loadText(text, source) {
+  const fallbackName = source.replace(/\.[^.]+$/, "");
+  try {
+    const rows = data.parse(text, fallbackName);
+    adopt(new data.Dataset(rows, source), {
+      message: `${source} chargé — ${fmt(rows.length)} mesures`,
+      tone: "is-ok",
+    });
+  } catch (error) {
+    if (!(error instanceof data.MappingNeeded)) {
+      say(`Import refusé — ${error.message}`, "is-error");
+      return;
+    }
+    const known = readMappings()[signature(error.table.header)];
+    if (known) {
+      try {
+        const rows = data.toMeasures(error.table, { ...known, siteName: known.siteName || fallbackName });
+        adopt(new data.Dataset(rows, source), {
+          message: `${source} chargé — ${fmt(rows.length)} mesures (colonnes reconnues)`,
+          tone: "is-ok",
+        });
+        return;
+      } catch {
+        /* la désignation mémorisée ne colle plus : on redemande */
+      }
+    }
+    openMapper(error.table, error.suggestion, source);
+  }
+}
+
+function currentMapping() {
+  return {
+    timestamp: Number(nodes.mapTimestamp.value),
+    power: Number(nodes.mapPower.value),
+    site: Number(nodes.mapSite.value),
+    siteName: nodes.mapName.value,
+  };
+}
+
+function fillSelect(select, header, selected, noneLabel) {
+  select.replaceChildren();
+  if (noneLabel) {
+    const none = document.createElement("option");
+    none.value = "-1";
+    none.textContent = noneLabel;
+    select.append(none);
+  }
+  header.forEach((name, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = name || `Colonne ${index + 1}`;
+    select.append(option);
+  });
+  select.value = String(selected);
+}
+
+/** Aperçu des premières lignes, colonnes retenues mises en évidence. */
+function renderPreview() {
+  if (!pending) return;
+  const { header, rows } = pending.table;
+  const used = new Set(Object.values(currentMapping()).filter((v) => typeof v === "number" && v >= 0));
+  const head = document.createElement("tr");
+  header.forEach((name, index) => {
+    const th = document.createElement("th");
+    th.textContent = name || `Colonne ${index + 1}`;
+    if (used.has(index)) th.className = "is-used";
+    head.append(th);
+  });
+  const body = rows.slice(0, 4).map((cells) => {
+    const tr = document.createElement("tr");
+    header.forEach((_, index) => {
+      const td = document.createElement("td");
+      td.textContent = cells[index] ?? "";
+      if (used.has(index)) td.className = "is-used";
+      tr.append(td);
+    });
+    return tr;
+  });
+  nodes.mapperTable.replaceChildren(head, ...body);
+  nodes.mapNameField.hidden = Number(nodes.mapSite.value) >= 0;
+}
+
+function openMapper(table, suggestion, source) {
+  pending = { table, source };
+  nodes.mapperIntro.textContent = `${source} — ${fmt(table.rows.length)} lignes.`
+    + " Les intitulés ne sont pas ceux attendus : indiquez quelle colonne porte quoi.";
+  fillSelect(nodes.mapTimestamp, table.header, suggestion.timestamp);
+  fillSelect(nodes.mapPower, table.header, suggestion.power);
+  fillSelect(nodes.mapSite, table.header, suggestion.site, "aucune — un seul site");
+  nodes.mapName.value = suggestion.siteName || source.replace(/\.[^.]+$/, "");
+  renderPreview();
+  nodes.mapper.hidden = false;
+  say("");
+  nodes.mapper.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function closeMapper() {
+  nodes.mapper.hidden = true;
+  pending = null;
+}
+
+function applyMapper() {
+  if (!pending) return;
+  const mapping = currentMapping();
+  try {
+    const rows = data.toMeasures(pending.table, mapping);
+    rememberMapping(pending.table.header, mapping);
+    const source = pending.source;
+    closeMapper();
+    adopt(new data.Dataset(rows, source), {
+      message: `${source} chargé — ${fmt(rows.length)} mesures`,
+      tone: "is-ok",
+    });
+  } catch (error) {
+    say(error.message, "is-error");
+  }
+}
+
+/** Transforme une adresse de feuille Google en adresse de CSV. */
+function sheetCsvUrl(raw) {
+  const url = raw.trim();
+  if (!/docs\.google\.com\/spreadsheets/.test(url)) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname.includes("/d/e/")) {
+      // Feuille « publiée sur le web » : la seule forme lisible par une page.
+      parsed.pathname = parsed.pathname.replace(/\/(pubhtml|pub)$/, "/pub");
+      parsed.searchParams.set("output", "csv");
+      parsed.searchParams.set("single", "true");
+      return parsed.toString();
+    }
+    const id = parsed.pathname.match(/\/d\/([^/]+)/);
+    if (id) {
+      const gid = (url.match(/[#&?]gid=(\d+)/) || [])[1] || "0";
+      return `https://docs.google.com/spreadsheets/d/${id[1]}/export?format=csv&gid=${gid}`;
+    }
+  } catch {
+    /* adresse non analysable : on la passe telle quelle */
+  }
+  return url;
+}
+
+async function loadFromLink(raw, { remember = true } = {}) {
+  const url = sheetCsvUrl(raw);
+  say("Chargement du lien…");
+  let text;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`réponse ${response.status}`);
+    text = await response.text();
+  } catch (error) {
+    say(
+      /docs\.google\.com/.test(raw)
+        ? "Google refuse la lecture directe de cette feuille. Dans Google Sheets :"
+          + " Fichier → Partager → Publier sur le web → CSV, puis collez le lien obtenu."
+        : `Lecture impossible : ${error.message}`,
+      "is-error",
+    );
+    return;
+  }
+  if (remember) {
+    try {
+      localStorage.setItem(LINK_KEY, raw);
+    } catch {
+      /* sans mémoire, le lien vaut pour cette visite */
+    }
+    nodes.linkForget.hidden = false;
+  }
+  const name = /docs\.google\.com/.test(raw)
+    ? "Google Sheets"
+    : decodeURIComponent(url.split("/").pop().split("?")[0]) || "lien";
+  loadText(text, name);
 }
 
 function adopt(dataset, { message = "", tone = "" } = {}) {
@@ -219,36 +465,87 @@ function wireControls() {
     render();
   });
 
-  nodes.file.addEventListener("change", () => {
+  nodes.file.addEventListener("change", async () => {
     const file = nodes.file.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const rows = data.parse(String(reader.result));
-        adopt(new data.Dataset(rows, file.name), {
-          message: `${file.name} chargé — ${fmt(rows.length)} mesures`,
-          tone: "is-ok",
-        });
-      } catch (error) {
-        say(`Import refusé — ${error.message}`, "is-error");
-      }
-    };
-    reader.onerror = () => say("Fichier illisible.", "is-error");
-    reader.readAsText(file);
     nodes.file.value = ""; // permet de recharger deux fois le même fichier
+    if (!file) return;
+    try {
+      if (/\.xlsx?$/i.test(file.name)) {
+        const { csv, name } = await spreadsheetToCsv(file);
+        loadText(csv, `${file.name} (feuille « ${name} »)`);
+      } else {
+        loadText(await file.text(), file.name);
+      }
+    } catch (error) {
+      say(`Import refusé — ${error.message}`, "is-error");
+    }
   });
+
+  nodes.linkToggle.addEventListener("click", () => {
+    nodes.linkRow.hidden = !nodes.linkRow.hidden;
+    if (!nodes.linkRow.hidden) nodes.linkInput.focus();
+  });
+  nodes.linkLoad.addEventListener("click", () => {
+    const raw = nodes.linkInput.value.trim();
+    if (raw) loadFromLink(raw);
+  });
+  nodes.linkInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") nodes.linkLoad.click();
+  });
+  nodes.linkForget.addEventListener("click", () => {
+    try {
+      localStorage.removeItem(LINK_KEY);
+    } catch { /* rien à oublier */ }
+    nodes.linkInput.value = "";
+    nodes.linkForget.hidden = true;
+    say("Lien oublié — la page repartira des données de démonstration.", "is-ok");
+  });
+
+  for (const select of [nodes.mapTimestamp, nodes.mapPower, nodes.mapSite]) {
+    select.addEventListener("change", renderPreview);
+  }
+  el("map-apply").addEventListener("click", applyMapper);
+  el("map-cancel").addEventListener("click", () => {
+    closeMapper();
+    say("Import annulé.");
+  });
+
+  nodes.exportCsv.addEventListener("click", downloadNormalised);
 
   nodes.reset.addEventListener("click", async () => {
     try {
-      adopt(await loadFromUrl(DEFAULT_CSV), {
-        message: "Retour aux données de démonstration",
-        tone: "is-ok",
-      });
+      localStorage.removeItem(LINK_KEY);
+    } catch { /* pas de mémoire, rien à effacer */ }
+    nodes.linkForget.hidden = true;
+    closeMapper();
+    try {
+      loadText(await fetchText(DEFAULT_CSV), "sample_energy.csv");
+      say("Retour aux données de démonstration", "is-ok");
     } catch (error) {
       say(error.message, "is-error");
     }
   });
+}
+
+/** Enregistre les données courantes aux colonnes attendues.
+ *  C'est la sortie de secours du chemin « Excel bricolé -> outil » : une fois
+ *  les colonnes désignées, on repart avec un fichier propre, réutilisable par
+ *  scripts/build_export.py comme par n'importe quel tableur. */
+function downloadNormalised() {
+  const ds = state.dataset;
+  if (!ds) return;
+  const lines = ["timestamp,site,power_kw"];
+  for (const row of ds.rows) {
+    const site = `"${row.site.replace(/"/g, '""')}"`;
+    lines.push(`${isoStamp(new Date(row.t))},${site},${row.kw}`);
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = ds.source.replace(/\.[^.]+$/, "").replace(/[^\w\-]+/g, "-") + "-normalise.csv";
+  link.click();
+  URL.revokeObjectURL(link.href);
+  say(`${fmt(ds.rows.length)} mesures enregistrées au format attendu.`, "is-ok");
 }
 
 // --------------------------------------------------------------------------
@@ -437,10 +734,24 @@ async function boot() {
     adopt(new data.Dataset(data.parse(csv), config?.source || "données embarquées"));
     return;
   }
+
   // ?data=<url> permet de pointer la page vers un autre relevé sans la modifier.
-  const url = new URLSearchParams(location.search).get("data") || DEFAULT_CSV;
+  const param = new URLSearchParams(location.search).get("data");
+  let saved = null;
   try {
-    adopt(await loadFromUrl(url));
+    saved = localStorage.getItem(LINK_KEY);
+  } catch { /* pas de mémoire disponible */ }
+
+  if (!param && saved) {
+    nodes.linkInput.value = saved;
+    nodes.linkForget.hidden = false;
+    await loadFromLink(saved, { remember: false });
+    return;
+  }
+
+  const url = param || DEFAULT_CSV;
+  try {
+    loadText(await fetchText(url), url.split("/").pop().split("?")[0] || "données");
   } catch (error) {
     nodes.chip.textContent = "aucune donnée";
     say(error.message, "is-error");

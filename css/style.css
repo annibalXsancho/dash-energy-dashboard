@@ -53,6 +53,12 @@
 
 * { box-sizing: border-box; }
 
+/* Un élément masqué le reste vraiment : sans cette règle, tout composant à qui
+   l'on donne `display: flex` ignore l'attribut `hidden` (c'est ainsi que le
+   champ « nom du site » restait affiché alors qu'une colonne site était
+   choisie). */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--page);
@@ -225,6 +231,48 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .feedback.is-ok { color: var(--good); }
 .feedback.is-error { color: var(--critical); }
 
+/* --- Chargement par lien ------------------------------------------------- */
+.filter--link { flex: 1 1 100%; }
+.filter--link input[type="url"] { flex: 1 1 auto; min-width: 260px; }
+.link-note {
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  margin: var(--sp-1) 0 0;
+  max-width: 82ch;
+  line-height: 1.5;
+}
+.link-note strong { color: var(--ink-2); font-weight: 600; }
+
+/* --- Désignation des colonnes -------------------------------------------- */
+.mapper {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3);
+  box-shadow: var(--elev-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.mapper-preview { overflow-x: auto; margin-top: var(--sp-1); }
+.mapper-preview table { border-collapse: collapse; font-size: var(--fs-sm); }
+.mapper-preview th { white-space: nowrap; }
+.mapper-preview td {
+  padding: 8px 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  box-shadow: inset 0 -1px 0 var(--grid);
+}
+/* La colonne retenue se repère d'un coup d'œil dans l'aperçu. */
+.mapper-preview .is-used { color: var(--ink); }
+.mapper-preview th.is-used { color: var(--series-1); }
+.mapper-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.mapper-actions { margin-top: var(--sp-1); }
+
 /* --- Paramètres tarifaires ----------------------------------------------- */
 .tariff-block {
   background: var(--surface);
@@ -375,6 +423,7 @@ th.num, td.num { text-align: right; }
 
 /* Livrable autonome : les boutons de chargement n'ont plus lieu d'être. */
 .is-export .filter--data,
+.is-export .filter--link,
 .is-export .footer-tool { display: none; }
 .export-note { color: var(--ink-2); }
 
