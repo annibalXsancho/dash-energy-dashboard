@@ -129,6 +129,24 @@ export function readTable(text) {
 
 const SAMPLE = 40; // lignes examinées pour deviner la nature d'une colonne
 
+/** Facteur de conversion vers le kilowatt. Un relevé de compteur est souvent
+ *  en watts (« P [W] ») : pris pour des kW, il afficherait des puissances
+ *  mille fois trop grandes sans que rien ne le signale. */
+export const UNITS = { W: 0.001, kW: 1, MW: 1000 };
+
+export function detectUnitFor(table, column) {
+  if (!table || column < 0) return "kW";
+  return detectUnit(table.header[column] ?? "");
+}
+
+function detectUnit(headerCell) {
+  const h = String(headerCell).toLowerCase();
+  if (/\bmw\b|\[mw\]|\(mw\)/.test(h)) return "MW";
+  if (/\bkw\b|\[kw\]|\(kw\)|_kw/.test(h)) return "kW";
+  if (/\[w\]|\(w\)|\bw\b|watt/.test(h)) return "W";
+  return "kW";
+}
+
 function looksLikeTime(table, column) {
   let hits = 0;
   for (const row of table.rows.slice(0, SAMPLE)) {
@@ -168,7 +186,13 @@ export function autoMap(table) {
   const isEnergy = (h) => /kwh|k?wh\b|énergie|energie|consommation/.test(h);
   let power = find((h) => h === "power_kw");
   if (power === -1) power = find((h) => /puissance|power/.test(h) && !isEnergy(h));
-  if (power === -1) power = find((h) => /\bkw\b|\(kw\)|_kw/.test(h) && !isEnergy(h));
+  if (power === -1) {
+    power = find((h) => /\bkw\b|\(kw\)|\[kw\]|_kw|\bmw\b|\[mw\]|\[w\]|\(w\)|\bw\b/.test(h)
+      && !isEnergy(h));
+  }
+  // « site A P [W] » : dans les exports de compteurs, la puissance active
+  // s'abrège en P isolé.
+  if (power === -1) power = find((h) => /\bp\b/.test(h) && !isEnergy(h));
   if (power === -1) {
     power = find((h, i) => i !== timestamp && !isEnergy(h) && looksNumeric(table, i));
   }
@@ -182,7 +206,13 @@ export function autoMap(table) {
       && distinctCount(table, i) <= 40);
   }
 
-  return { timestamp, power, site, siteName: "" };
+  // Sans colonne de site, l'en-tête de la puissance donne le meilleur nom
+  // disponible : « site A P [W] » -> « site A P ».
+  const suggestedName = power >= 0
+    ? String(table.header[power]).replace(/[[(][^\])]*[\])]/g, "").trim()
+    : "";
+
+  return { timestamp, power, site, unit: detectUnit(table.header[power] ?? ""), siteName: suggestedName };
 }
 
 /** Applique une désignation de colonnes et produit les mesures. */
@@ -191,10 +221,11 @@ export function toMeasures(table, mapping) {
     throw new DataError("Il faut au moins une colonne de date et une colonne de puissance.");
   }
   const fallbackName = (mapping.siteName || "").trim() || "Site";
+  const factor = UNITS[mapping.unit] ?? 1;
   const rows = [];
   for (const cells of table.rows) {
     const t = toTime(cells[mapping.timestamp] ?? "", true);
-    const kw = toNumber(cells[mapping.power] ?? "");
+    const kw = toNumber(cells[mapping.power] ?? "") * factor;
     if (Number.isNaN(t) || Number.isNaN(kw)) continue; // ligne inexploitable
     const site = mapping.site >= 0
       ? String(cells[mapping.site] ?? "").replace(/^"|"$/g, "").trim() || fallbackName
@@ -220,11 +251,14 @@ export function parse(text, fallbackSiteName = "") {
       timestamp: lower.indexOf("timestamp"),
       power: lower.indexOf("power_kw"),
       site: lower.indexOf("site"),
+      unit: "kW",
       siteName: fallbackSiteName,
     });
   }
   const suggestion = autoMap(table);
-  suggestion.siteName = fallbackSiteName;
+  // Le nom déduit de l'en-tête (« site A P ») vaut mieux que le nom du
+  // fichier ; ce dernier ne sert que si l'en-tête n'apprend rien.
+  suggestion.siteName = suggestion.siteName || fallbackSiteName;
   throw new MappingNeeded(table, suggestion);
 }
 

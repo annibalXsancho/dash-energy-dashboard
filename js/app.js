@@ -47,6 +47,7 @@ const nodes = {
   mapperTable: el("mapper-table"),
   mapTimestamp: el("map-timestamp"),
   mapPower: el("map-power"),
+  mapUnit: el("map-unit"),
   mapSite: el("map-site"),
   mapName: el("map-name"),
   mapNameField: el("map-name-field"),
@@ -218,6 +219,7 @@ function currentMapping() {
     timestamp: Number(nodes.mapTimestamp.value),
     power: Number(nodes.mapPower.value),
     site: Number(nodes.mapSite.value),
+    unit: nodes.mapUnit.value,
     siteName: nodes.mapName.value,
   };
 }
@@ -243,7 +245,8 @@ function fillSelect(select, header, selected, noneLabel) {
 function renderPreview() {
   if (!pending) return;
   const { header, rows } = pending.table;
-  const used = new Set(Object.values(currentMapping()).filter((v) => typeof v === "number" && v >= 0));
+  const mapping = currentMapping();
+  const used = new Set([mapping.timestamp, mapping.power, mapping.site].filter((v) => v >= 0));
   const head = document.createElement("tr");
   header.forEach((name, index) => {
     const th = document.createElement("th");
@@ -272,6 +275,7 @@ function openMapper(table, suggestion, source) {
   fillSelect(nodes.mapTimestamp, table.header, suggestion.timestamp);
   fillSelect(nodes.mapPower, table.header, suggestion.power);
   fillSelect(nodes.mapSite, table.header, suggestion.site, "aucune — un seul site");
+  nodes.mapUnit.value = suggestion.unit || "kW";
   nodes.mapName.value = suggestion.siteName || source.replace(/\.[^.]+$/, "");
   renderPreview();
   nodes.mapper.hidden = false;
@@ -504,6 +508,10 @@ function wireControls() {
   for (const select of [nodes.mapTimestamp, nodes.mapPower, nodes.mapSite]) {
     select.addEventListener("change", renderPreview);
   }
+  // Changer de colonne de puissance peut changer l'unité qu'on en déduit.
+  nodes.mapPower.addEventListener("change", () => {
+    nodes.mapUnit.value = data.detectUnitFor(pending?.table, Number(nodes.mapPower.value));
+  });
   el("map-apply").addEventListener("click", applyMapper);
   el("map-cancel").addEventListener("click", () => {
     closeMapper();

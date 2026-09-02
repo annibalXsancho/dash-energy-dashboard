@@ -193,12 +193,20 @@ elle repère les colonnes de dates, évite les colonnes d'**énergie** (`kWh`,
 `index`) quand elle cherche une puissance, et reconnaît une colonne de site à
 son faible nombre de valeurs distinctes.
 
-Deux détails qui font gagner du temps :
+**L'unité compte autant que la colonne.** Un relevé de compteur est souvent en
+**watts** (`site A P [W]`) : pris pour des kilowatts, il afficherait des
+puissances mille fois trop grandes sans que rien ne le signale. Le formulaire
+propose donc une unité (W / kW / MW), devinée d'après l'intitulé, et la
+conversion se fait à la lecture.
+
+Trois détails qui font gagner du temps :
 
 - si le fichier ne contient **qu'un seul compteur** et aucune colonne de site,
   choisissez « aucune — un seul site » et donnez-lui un nom ;
 - la désignation est **mémorisée par forme d'en-tête** : le même export, le mois
-  suivant, se charge sans rien redemander.
+  suivant, se charge sans rien redemander ;
+- le nom du site est déduit de l'intitulé de la puissance (`site A P [W]` →
+  `site A P`), modifiable avant validation.
 
 Le bouton **« CSV normalisé »** enregistre les données affichées aux trois
 colonnes canoniques. C'est ce fichier-là qu'on range dans `missions/` et qu'on
@@ -210,6 +218,9 @@ client n'ouvre jamais un formulaire de désignation de colonnes).
 Bouton **« Lien… »**, coller l'adresse, **Charger**. L'adresse est mémorisée :
 à chaque ouverture de la page, les données sont **relues à la source** — c'est
 la « connexion » au sens courant du terme. Le bouton **Démo** l'oublie.
+
+*(Vérifié sur une vraie feuille publiée : Google répond avec l'en-tête
+`access-control-allow-origin: *`, la lecture directe fonctionne.)*
 
 Pour qu'une feuille soit lisible par une page web, elle doit être **publiée** :
 dans Google Sheets, `Fichier → Partager → Publier sur le web → CSV`. Une adresse
