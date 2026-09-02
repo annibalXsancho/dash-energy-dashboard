@@ -73,9 +73,14 @@ def _read_table(source) -> pd.DataFrame:
 def normalise(df: pd.DataFrame) -> pd.DataFrame:
     """Vérifie les colonnes, convertit les types, trie, retire les lignes vides."""
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    if len(missing) == len(REQUIRED_COLUMNS):
+        raise DataError(
+            "Aucune des colonnes attendues n'a été trouvée. La première ligne du "
+            "fichier doit nommer les colonnes : timestamp, site, power_kw."
+        )
     if missing:
         raise DataError(
-            "Colonnes manquantes : " + ", ".join(missing)
+            "Colonne manquante : " + ", ".join(missing)
             + ". Attendu : timestamp, site, power_kw."
         )
     out = df.loc[:, list(REQUIRED_COLUMNS)].copy()

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Énergie &amp; puissance — tableau de bord</title>
+<meta name="description" content="Tableau de bord interactif de puissance et d'énergie : indicateurs, courbe de charge, monotone et profil horaire.">
+<link rel="stylesheet" href="css/style.css?v=1">
+<!-- plotly.js : version figée (jamais « latest », qui reste bloqué sur une vieille
+     version), puis le fichier de langue qui traduit les dates ET impose la
+     virgule décimale et l'espace fine des milliers. L'ordre compte : le second
+     s'enregistre auprès du premier. -->
+<script src="https://cdn.plot.ly/plotly-4.0.0.min.js" charset="utf-8"></script>
+<script src="https://cdn.plot.ly/plotly-locale-fr-latest.js" charset="utf-8"></script>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Tableau de bord</p>
+      <h1>Énergie &amp; puissance</h1>
+    </div>
+    <div class="chip" id="source-chip">chargement…</div>
+  </header>
+
+  <section class="filters" aria-label="Filtres">
+    <div class="filter">
+      <span class="eyebrow" id="lbl-periode">Période</span>
+      <div class="field-row" role="group" aria-labelledby="lbl-periode">
+        <input type="date" id="date-start" aria-label="Début de période">
+        <span class="arrow" aria-hidden="true">→</span>
+        <input type="date" id="date-end" aria-label="Fin de période">
+      </div>
+      <div class="btn-row presets">
+        <button class="pill" data-preset="7">7 j</button>
+        <button class="pill" data-preset="30">30 j</button>
+        <button class="pill" data-preset="all">Tout</button>
+      </div>
+    </div>
+
+    <div class="filter filter--grow">
+      <span class="eyebrow" id="lbl-sites">Sites</span>
+      <div class="chips" id="site-chips" role="group" aria-labelledby="lbl-sites"></div>
+    </div>
+
+    <div class="filter">
+      <span class="eyebrow" id="lbl-gran">Granularité</span>
+      <div class="segmented" id="granularity" role="group" aria-labelledby="lbl-gran">
+        <button data-freq="raw">Pas natif</button>
+        <button data-freq="h" class="is-on">Heure</button>
+        <button data-freq="D">Jour</button>
+        <button data-freq="W">Semaine</button>
+      </div>
+    </div>
+
+    <div class="filter">
+      <span class="eyebrow">Données</span>
+      <div class="btn-row">
+        <label class="btn btn--tonal" for="file-input">Charger un CSV</label>
+        <input type="file" id="file-input" accept=".csv,.txt,text/csv" hidden>
+        <button class="btn btn--ghost" id="reset-data">Démo</button>
+      </div>
+    </div>
+  </section>
+
+  <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+
+  <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
+
+  <div class="charts">
+    <section class="card card--wide">
+      <header class="card-head">
+        <h2 class="card-title">Courbe de puissance appelée</h2>
+        <p class="card-hint">Puissance moyenne par pas de temps, une couleur par site.</p>
+      </header>
+      <div class="graph-slot"><div class="graph" id="fig-power"></div></div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2 class="card-title">Énergie par période</h2>
+        <p class="card-hint">Consommation cumulée, empilée par site.</p>
+      </header>
+      <div class="graph-slot"><div class="graph" id="fig-energy"></div></div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2 class="card-title">Monotone de charge</h2>
+        <p class="card-hint">Puissance atteinte ou dépassée, en % du temps.</p>
+      </header>
+      <div class="graph-slot"><div class="graph" id="fig-duration"></div></div>
+    </section>
+
+    <section class="card card--wide">
+      <header class="card-head">
+        <h2 class="card-title">Profil de charge</h2>
+        <p class="card-hint">Puissance moyenne par heure et par jour — repère les habitudes.</p>
+      </header>
+      <div class="graph-slot"><div class="graph" id="fig-profile"></div></div>
+    </section>
+  </div>
+
+  <details class="table-block">
+    <summary class="table-summary">Voir les données du tableau de bord</summary>
+    <p class="table-note" id="table-note"></p>
+    <div class="table-scroll">
+      <table id="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Période</th>
+            <th scope="col">Site</th>
+            <th scope="col" class="num">Énergie (kWh)</th>
+            <th scope="col" class="num">Puissance moy. (kW)</th>
+            <th scope="col" class="num">Pointe (kW)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </details>
+
+  <footer class="page-footer">
+    <p>Les calculs se font dans votre navigateur : le fichier que vous chargez ne quitte pas votre ordinateur.
+       Colonnes attendues : <code>timestamp</code>, <code>site</code>, <code>power_kw</code>.</p>
+  </footer>
+</div>
+
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>
