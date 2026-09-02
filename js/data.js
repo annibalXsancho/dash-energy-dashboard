@@ -64,8 +64,23 @@ const FR = /^(\d{2})\/(\d{2})\/(\d{4})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/;
 /** Renvoie un horodatage en millisecondes, lu en heure LOCALE.
  *  (Passer par `new Date(texte)` lirait « 2026-06-01 » en UTC et décalerait
  *  toute la journée selon le fuseau du lecteur.) */
-function toTime(text) {
+function toTime(text, allowSerial = false) {
   const s = String(text).trim();
+  if (allowSerial) {
+    // Numéro de série Excel : jours écoulés depuis le 30/12/1899. Un classeur
+    // dont la colonne de dates n'est pas *formatée* en date arrive sous cette
+    // forme. On ne l'accepte QUE sur une colonne explicitement désignée : en
+    // détection automatique, une colonne de puissance de 20 000 à 80 000 kW
+    // serait prise pour des dates.
+    const serial = Number(s.replace(",", "."));
+    if (Number.isFinite(serial) && serial > 20000 && serial < 80000) {
+      const utc = new Date(Math.round((serial - 25569) * 86400000));
+      return new Date(
+        utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate(),
+        utc.getUTCHours(), utc.getUTCMinutes(), utc.getUTCSeconds(),
+      ).getTime();
+    }
+  }
   let m = ISO.exec(s);
   if (m) {
     return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime();
@@ -74,6 +89,11 @@ function toTime(text) {
   if (m) {
     return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime();
   }
+  // Dernier recours : l'analyseur du navigateur. On ne le laisse voir que des
+  // chaînes qui RESSEMBLENT à une date — sans ce filtre, il lit « 45900.5 »
+  // comme l'an 45900 et une colonne de nombres se ferait passer pour des dates
+  // à la détection automatique.
+  if (!/[-/:]/.test(s)) return NaN;
   const fallback = Date.parse(s);
   return Number.isNaN(fallback) ? NaN : fallback;
 }
@@ -173,7 +193,7 @@ export function toMeasures(table, mapping) {
   const fallbackName = (mapping.siteName || "").trim() || "Site";
   const rows = [];
   for (const cells of table.rows) {
-    const t = toTime(cells[mapping.timestamp] ?? "");
+    const t = toTime(cells[mapping.timestamp] ?? "", true);
     const kw = toNumber(cells[mapping.power] ?? "");
     if (Number.isNaN(t) || Number.isNaN(kw)) continue; // ligne inexploitable
     const site = mapping.site >= 0
