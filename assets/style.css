@@ -1,0 +1,363 @@
+/* ==========================================================================
+   Tableau de bord énergie — feuille de style unique.
+   Dash sert automatiquement tout ce que contient le dossier /assets.
+   Les couleurs reprennent exactement les jetons de src/theme.py : si vous en
+   changez un, changez-le aux deux endroits.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #242422;
+  --surface-3: #2e2e2b;
+
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --ink-muted: #898781;
+
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --hairline: rgba(255, 255, 255, 0.10);
+
+  --series-1: #3987e5;
+  --good: #0ca30c;
+  --critical: #d03b3b;
+
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  --sp-1: 6px;
+  --sp-2: 10px;
+  --sp-3: 16px;
+  --sp-4: 24px;
+  --sp-5: 36px;
+
+  --fs-micro: 11px;
+  --fs-sm: 12px;
+  --fs-base: 14px;
+  --fs-lg: 18px;
+  --fs-hero: 30px;
+
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-2: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 18px 48px rgba(0, 0, 0, 0.55);
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-1: 150ms;
+  --dur-2: 240ms;
+
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* --- Micro-étiquettes ---------------------------------------------------- */
+.eyebrow {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* --- En-tête ------------------------------------------------------------- */
+.topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.chip {
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  box-shadow: var(--elev-1);
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Barre de filtres ---------------------------------------------------- */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-1);
+}
+
+.filter { min-width: 190px; }
+.filter--grow { flex: 1 1 260px; }
+.filter label { display: block; }
+
+.btn-row { display: flex; gap: var(--sp-1); }
+
+.btn {
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 9px 14px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  color: var(--ink);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.btn:hover { background: var(--surface-3); transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(0.98); }
+.btn--ghost { background: transparent; color: var(--ink-2); }
+.btn--ghost:hover { background: var(--surface-2); }
+
+/* --- Message de retour (import CSV) -------------------------------------- */
+.feedback {
+  font-size: var(--fs-sm);
+  min-height: 0;
+  color: var(--ink-muted);
+  transition: opacity var(--dur-2) var(--ease);
+}
+.feedback:empty { display: none; }
+.feedback.is-ok { color: var(--good); }
+.feedback.is-error { color: var(--critical); }
+
+/* --- Tuiles d'indicateurs ------------------------------------------------ */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  gap: var(--sp-2);
+}
+
+.tile {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3);
+  box-shadow: var(--elev-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: transform var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+}
+.tile:hover { transform: translateY(-2px); box-shadow: var(--elev-2); }
+
+.stat-line { display: flex; align-items: baseline; gap: 6px; }
+.stat-value {
+  font-size: var(--fs-hero);
+  line-height: 1.05;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.stat-unit { font-size: var(--fs-base); color: var(--ink-muted); }
+.stat-caption { font-size: var(--fs-sm); color: var(--ink-muted); margin-top: 2px; }
+
+.delta {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-sm);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.delta-label { color: var(--ink-muted); }
+.delta.is-good .delta-arrow, .delta.is-good .delta-value { color: var(--good); }
+.delta.is-bad .delta-arrow, .delta.is-bad .delta-value { color: var(--critical); }
+.delta.is-neutral { color: var(--ink-muted); }
+.delta-arrow { font-size: 10px; }
+
+/* --- Cartes de graphiques ------------------------------------------------ */
+.charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3);
+  box-shadow: var(--elev-1);
+  min-width: 0;
+}
+.card--wide { grid-column: 1 / -1; }
+
+.card-head { margin-bottom: var(--sp-1); }
+.card-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.card-hint { margin: 3px 0 0; font-size: var(--fs-sm); color: var(--ink-muted); }
+
+/* Hauteur des graphiques : elle se pose sur l'EMPLACEMENT, pas sur le
+   graphique lui-même — Dash lui applique « height: 100 % » en style en ligne,
+   qui l'emporterait sur toute règle de cette feuille. */
+.graph-slot { height: 320px; }
+.card--wide .graph-slot { height: 380px; }
+.graph-slot > div { height: 100%; }
+
+/* --- Vue tabulaire ------------------------------------------------------- */
+.table-block {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3);
+  box-shadow: var(--elev-1);
+}
+.table-summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 550;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.table-summary::before {
+  content: "›";
+  color: var(--ink-muted);
+  transition: transform var(--dur-1) var(--ease);
+  display: inline-block;
+}
+details[open] .table-summary::before { transform: rotate(90deg); }
+.table-note {
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  margin: var(--sp-2) 0;
+}
+
+.page-footer {
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  padding-top: var(--sp-2);
+}
+.page-footer p { margin: 0; }
+
+/* ==========================================================================
+   Habillage des composants Dash (ils arrivent avec leur propre balisage)
+   ========================================================================== */
+
+/* Dash 4 habille ses composants (listes déroulantes, calendrier) avec ses
+   propres variables `--Dash-*`, en clair par défaut : un menu blanc dans un
+   tableau de bord sombre. On rebranche donc ces variables sur nos jetons.
+   Le sélecteur `:root:root` — volontairement redoublé — l'emporte sur la
+   déclaration `:root` de Dash quelle que soit l'ordre d'insertion des
+   feuilles de style. */
+:root:root {
+  --Dash-Fill-Inverse-Strong: var(--surface-2);      /* fond des contrôles et menus */
+  --Dash-Fill-Interactive-Strong: var(--series-1);   /* focus, sélection */
+  --Dash-Fill-Interactive-Weak: rgba(57, 135, 229, 0.18);
+  --Dash-Fill-Primary-Hover: rgba(255, 255, 255, 0.06);
+  --Dash-Fill-Primary-Active: rgba(255, 255, 255, 0.10);
+  --Dash-Fill-Disabled: var(--grid);
+  --Dash-Stroke-Strong: transparent;                 /* pas d'encadré 1px */
+  --Dash-Stroke-Weak: var(--hairline);
+  --Dash-Text-Primary: var(--ink);
+  --Dash-Text-Strong: var(--ink);
+  --Dash-Text-Weak: var(--ink-muted);
+  --Dash-Text-Disabled: var(--ink-muted);
+  --Dash-Shading-Strong: rgba(0, 0, 0, 0.55);
+  --Dash-Shading-Weak: rgba(0, 0, 0, 0.35);
+}
+
+/* Listes déroulantes */
+.dash-dropdown,
+.dash-dropdown-content { border-radius: var(--radius); }
+.dash-dropdown { min-height: 38px; color: var(--ink); }
+.dash-dropdown:focus,
+.dash-dropdown:focus-visible {
+  border-color: transparent;
+  outline: 2px solid color-mix(in srgb, var(--series-1) 70%, transparent);
+  outline-offset: 1px;
+}
+/* 200 px par défaut : trop court dès qu'il y a quelques sites. */
+.dash-dropdown-content { max-height: 320px; box-shadow: var(--elev-2); }
+.dash-dropdown-option { border-radius: 8px; box-shadow: none; }
+.dash-dropdown-option:hover { background: var(--surface-3); }
+.dash-dropdown-value-count {
+  background: var(--surface-3);
+  color: var(--ink-2);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+}
+.dash-dropdown-clear { color: var(--ink-muted); }
+
+/* Sélecteur de période */
+.dash-datepicker-input-wrapper {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+}
+.dash-datepicker-input {
+  color: var(--ink);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.dash-datepicker-content {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-3);
+  padding: var(--sp-2);
+}
+.dash-datepicker-calendar-date-inside { border-radius: 8px; }
+.dash-datepicker-calendar-date-selected {
+  background: var(--series-1);
+  color: #fff;
+}
+.dash-datepicker-calendar-date-highlighted {
+  background: color-mix(in srgb, var(--series-1) 24%, var(--surface-2));
+}
+
+/* Zone de dépôt de fichier */
+#upload-data { display: inline-block; }
+
+/* Indicateur de chargement : discret, jamais un saut de mise en page */
+.dash-loading, ._dash-loading { color: var(--ink-muted); }
+
+/* --- Adaptation aux petits écrans --------------------------------------- */
+@media (max-width: 980px) {
+  .charts { grid-template-columns: minmax(0, 1fr); }
+  .card--wide { grid-column: auto; }
+  .app { padding: var(--sp-4) var(--sp-3); }
+  .graph-slot, .card--wide .graph-slot { height: 300px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

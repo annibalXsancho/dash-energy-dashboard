@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+.idea/
+.vscode/
+# Les données réelles restent locales ; seul l'échantillon de démo est versionné.
+data/*.csv
+!data/sample_energy.csv

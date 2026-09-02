@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "energy-dashboard",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["app.py"],
+      "port": 8050,
+      "url": "http://127.0.0.1:8050"
+    }
+  ]
+}

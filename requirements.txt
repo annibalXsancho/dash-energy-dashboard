@@ -1,0 +1,4 @@
+# Dépendances du tableau de bord (installer avec : pip3 install -r requirements.txt)
+dash==4.4.1
+plotly==7.0.0
+pandas==3.0.5
