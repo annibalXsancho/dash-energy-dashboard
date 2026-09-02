@@ -1,10 +1,28 @@
+# --- Confidentialité : les données client ne doivent JAMAIS partir sur GitHub --
+# Ce dépôt est public. Les relevés d'un client racontent ses horaires de
+# production, son taux d'occupation, ses arrêts machine : ils restent en local.
+# Le hook .githooks/pre-commit double cette liste (voir README, § Confidentialité).
+# On exclut le CONTENU de missions/ (et non le dossier) : git ne redescend pas
+# dans un dossier exclu, l'exception ci-dessous ne marcherait pas autrement.
+missions/*
+livrables/
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+# Seules exceptions : le jeu de démonstration (synthétique) et le mode d'emploi
+# du dossier de missions.
+!data/sample_energy.csv
+!missions/LISEZ-MOI.md
+
+# --- Python ---------------------------------------------------------------
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# --- Système --------------------------------------------------------------
 .DS_Store
 .idea/
 .vscode/
-# Les données réelles restent locales ; seul l'échantillon de démo est versionné.
-data/*.csv
-!data/sample_energy.csv

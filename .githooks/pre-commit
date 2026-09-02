@@ -1,0 +1,32 @@
+#!/bin/sh
+# Refuse de committer des données client dans ce dépôt public.
+#
+# Le .gitignore couvre le cas normal ; ce hook couvre les autres : un fichier
+# ajouté avec « git add -f », un CSV renommé en .txt posé au mauvais endroit,
+# un livrable client glissé dans le dépôt. C'est la ceinture par-dessus les
+# bretelles, et c'est celle qui sert à 23 h la veille d'un rendu.
+#
+# Installation (une fois) :  git config core.hooksPath .githooks
+
+ALLOWED="data/sample_energy.csv missions/LISEZ-MOI.md"
+staged=$(git diff --cached --name-only --diff-filter=AM)
+blocked=""
+
+for file in $staged; do
+  case "$file" in
+    data/sample_energy.csv|missions/LISEZ-MOI.md) continue ;;
+    missions/*|livrables/*) blocked="$blocked\n  $file  (dossier de mission)" ;;
+    *.csv|*.tsv|*.xlsx|*.xls|*.parquet)
+      blocked="$blocked\n  $file  (fichier de données)" ;;
+  esac
+done
+
+if [ -n "$blocked" ]; then
+  printf '\n\033[31mCommit refusé — données potentiellement confidentielles :\033[0m'
+  printf "$blocked\n"
+  printf '\nCe dépôt est PUBLIC. Les relevés client se gardent en local\n'
+  printf '(dossier missions/, hors dépôt) et se livrent en HTML autonome.\n'
+  printf 'Retirer du commit :  git restore --staged <fichier>\n'
+  printf 'Si vous savez vraiment ce que vous faites :  git commit --no-verify\n\n'
+  exit 1
+fi

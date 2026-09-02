@@ -6,12 +6,12 @@
 <title>Énergie &amp; puissance — tableau de bord</title>
 <meta name="description" content="Tableau de bord interactif de puissance et d'énergie : indicateurs, courbe de charge, monotone et profil horaire.">
 <link rel="stylesheet" href="css/style.css?v=1">
-<!-- plotly.js : version figée (jamais « latest », qui reste bloqué sur une vieille
-     version), puis le fichier de langue qui traduit les dates ET impose la
-     virgule décimale et l'espace fine des milliers. L'ordre compte : le second
-     s'enregistre auprès du premier. -->
-<script src="https://cdn.plot.ly/plotly-4.0.0.min.js" charset="utf-8"></script>
-<script src="https://cdn.plot.ly/plotly-locale-fr-latest.js" charset="utf-8"></script>
+<!-- plotly.js embarqué dans le dépôt (voir vendor/LISEZ-MOI.md) : la page
+     fonctionne hors ligne et la version ne bouge pas sans qu'on le décide.
+     Le lot « cartesian » suffit (1,5 Mo au lieu de 4,3 Mo). L'ordre compte :
+     le fichier de langue s'enregistre auprès de plotly. -->
+<script src="vendor/plotly-cartesian-4.0.0.min.js" charset="utf-8"></script>
+<script src="vendor/plotly-locale-fr.js" charset="utf-8"></script>
 </head>
 <body>
 <div class="app">
@@ -54,7 +54,7 @@
       </div>
     </div>
 
-    <div class="filter">
+    <div class="filter filter--data">
       <span class="eyebrow">Données</span>
       <div class="btn-row">
         <label class="btn btn--tonal" for="file-input">Charger un CSV</label>
@@ -63,6 +63,16 @@
       </div>
     </div>
   </section>
+
+  <details class="tariff-block">
+    <summary class="table-summary">Paramètres tarifaires</summary>
+    <div class="tariff-grid" id="tariff-fields"></div>
+    <p class="tariff-note">
+      Le coût est une estimation à partir de ces valeurs, mémorisées dans ce navigateur.
+      Les pénalités de dépassement sont un <strong>ordre de grandeur</strong> —
+      la formule réelle du TURPE dépend du contrat.
+    </p>
+  </details>
 
   <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
 
@@ -122,7 +132,7 @@
   </details>
 
   <footer class="page-footer">
-    <p>Les calculs se font dans votre navigateur : le fichier que vous chargez ne quitte pas votre ordinateur.
+    <p class="footer-tool">Les calculs se font dans votre navigateur : le fichier que vous chargez ne quitte pas votre ordinateur.
        Colonnes attendues : <code>timestamp</code>, <code>site</code>, <code>power_kw</code>.</p>
   </footer>
 </div>

@@ -127,8 +127,10 @@ export function energyBars(agg, colors) {
   return { data, layout };
 }
 
-/** Monotone de charge : puissance atteinte ou dépassée, en % du temps. */
-export function loadDurationCurve(curve) {
+/** Monotone de charge : puissance atteinte ou dépassée, en % du temps.
+ *  `threshold` trace la puissance souscrite : ce qui dépasse à gauche du trait
+ *  est exactement ce qui se paie en pénalités. */
+export function loadDurationCurve(curve, threshold = 0) {
   if (!curve.length) return empty();
   const data = [
     {
@@ -147,6 +149,35 @@ export function loadDurationCurve(curve) {
     hovermode: "x unified",
     showlegend: false, // série unique : le titre de la carte suffit
   });
+  if (threshold > 0) {
+    const above = curve.filter((p) => p.kw > threshold).length / curve.length * 100;
+    layout.shapes = [
+      {
+        type: "line",
+        xref: "paper",
+        x0: 0,
+        x1: 1,
+        yref: "y",
+        y0: threshold,
+        y1: threshold,
+        line: { color: theme.INK_2, width: 1 },
+      },
+    ];
+    layout.annotations = [
+      {
+        xref: "paper",
+        x: 1,
+        y: threshold,
+        yanchor: "bottom",
+        xanchor: "right",
+        text: above >= 0.05
+          ? `puissance souscrite — dépassée ${above.toFixed(1).replace(".", ",")} % du temps`
+          : "puissance souscrite — jamais dépassée",
+        showarrow: false,
+        font: { color: theme.INK_2, size: 11 },
+      },
+    ];
+  }
   layout.xaxis.title = { text: "% du temps", font: { color: theme.INK_MUTED, size: 11 } };
   layout.xaxis.ticksuffix = " %";
   layout.xaxis.range = [0, 100];

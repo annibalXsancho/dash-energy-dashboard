@@ -5,8 +5,6 @@
 // libre, le séparateur est deviné, l'écriture française des nombres acceptée.
 // L'énergie n'est jamais lue : elle vaut puissance × durée du pas de temps.
 
-export const PRICE_EUR_PER_KWH = 0.18;
-
 export const GRANULARITIES = {
   raw: "Pas natif",
   h: "Heure",
@@ -239,7 +237,7 @@ export function heatMatrix(rows) {
 // --------------------------------------------------------------------------
 export function kpis(rows, stepHours) {
   if (!rows.length) {
-    return { energy: 0, peak: 0, peakAt: null, mean: 0, loadFactor: 0, cost: 0 };
+    return { energy: 0, peak: 0, peakAt: null, mean: 0, loadFactor: 0 };
   }
   const curve = totalCurve(rows);
   let peak = -Infinity;
@@ -257,8 +255,7 @@ export function kpis(rows, stepHours) {
     peakAt,
     mean,
     loadFactor: peak ? (mean / peak) * 100 : 0,
-    cost: energy * PRICE_EUR_PER_KWH,
-  };
+  }; // le coût ne se calcule pas ici : il dépend du tarif (voir tariff.js)
 }
 
 /** Même durée, juste avant la période affichée — sert aux écarts des indicateurs. */

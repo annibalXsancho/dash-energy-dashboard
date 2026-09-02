@@ -4,6 +4,7 @@
 import * as data from "./data.js";
 import * as figures from "./figures.js";
 import * as theme from "./theme.js";
+import * as tariff from "./tariff.js";
 import { fmt, humanEnergy, stampLong, stampTable, isoDay } from "./format.js";
 
 const DEFAULT_CSV = "data/sample_energy.csv";
@@ -12,7 +13,14 @@ const TABLE_ROW_CAP = 500;
 // L'énergie se lit mieux par tranche large : jamais plus fin que l'heure.
 const ENERGY_FREQ = { raw: "h", h: "D", D: "D", W: "W" };
 
-const state = { dataset: null, start: null, end: null, sites: [], freq: "h" };
+const state = {
+  dataset: null,
+  start: null,
+  end: null,
+  sites: [],
+  freq: "h",
+  tariff: tariff.load(), // mémorisé dans le navigateur d'un passage à l'autre
+};
 
 const el = (id) => document.getElementById(id);
 const nodes = {
@@ -25,6 +33,7 @@ const nodes = {
   segmented: el("granularity"),
   file: el("file-input"),
   reset: el("reset-data"),
+  tariffFields: el("tariff-fields"),
   tableBody: document.querySelector("#data-table tbody"),
   tableNote: el("table-note"),
 };
@@ -43,6 +52,47 @@ function say(message, tone = "") {
 // --------------------------------------------------------------------------
 // Chargement des données
 // --------------------------------------------------------------------------
+/** Données embarquées dans un livrable autonome (voir scripts/build_export.py).
+ *  Encodées en base64 : un nom de site ne peut pas casser la page en fermant
+ *  la balise <script> par accident. */
+function embeddedCsv() {
+  const node = document.getElementById("embedded-data");
+  if (!node) return null;
+  const binary = atob(node.textContent.trim());
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+function embeddedConfig() {
+  const node = document.getElementById("embedded-config");
+  if (!node) return null;
+  try {
+    return JSON.parse(node.textContent);
+  } catch {
+    return null;
+  }
+}
+
+/** Habille la page en livrable : nom du client, mention de génération, et
+ *  disparition des boutons de chargement (les données sont déjà dedans). */
+function applyExportConfig(config) {
+  document.body.classList.add("is-export");
+  if (config.tariff) state.tariff = { ...state.tariff, ...config.tariff };
+  if (config.client) {
+    document.querySelector(".topbar .eyebrow").textContent = config.client;
+    document.title = `${config.client} — Énergie & puissance`;
+  }
+  if (config.title) document.querySelector(".topbar h1").textContent = config.title;
+  const note = document.createElement("p");
+  note.className = "export-note";
+  note.textContent = [
+    config.generated ? `Document généré le ${config.generated}` : null,
+    config.source ? `à partir de ${config.source}` : null,
+  ].filter(Boolean).join(" ") + ". Les données sont contenues dans ce fichier :"
+    + " il fonctionne hors ligne et n'envoie rien sur Internet.";
+  document.querySelector(".page-footer").prepend(note);
+}
+
 async function loadFromUrl(url) {
   let response;
   try {
@@ -105,6 +155,31 @@ function buildSiteChips() {
       render();
     });
     nodes.chips.append(button);
+  }
+}
+
+/** Construit les champs du panneau tarifaire à partir de tariff.FIELDS. */
+function buildTariffFields() {
+  let timer = null;
+  for (const field of tariff.FIELDS) {
+    const box = document.createElement("div");
+    box.className = "tariff-field";
+    const id = `tariff-${field.key}`;
+    box.innerHTML = `<label for="${id}">${field.label}</label>`
+      + `<span class="tariff-input"><input type="number" id="${id}" min="0"`
+      + ` step="${field.step}"${field.max ? ` max="${field.max}"` : ""}>`
+      + `<span class="unit">${field.unit}</span></span>`;
+    const input = box.querySelector("input");
+    input.value = state.tariff[field.key];
+    input.addEventListener("input", () => {
+      const value = Number(input.value);
+      state.tariff[field.key] = Number.isFinite(value) ? value : tariff.DEFAULTS[field.key];
+      tariff.save(state.tariff);
+      // On attend une pause de frappe : sinon chaque chiffre relance tout le calcul.
+      clearTimeout(timer);
+      timer = setTimeout(render, 250);
+    });
+    nodes.tariffFields.append(box);
   }
 }
 
@@ -213,10 +288,68 @@ function tile(label, value, unit, caption, delta) {
   return box;
 }
 
-function renderKpis(current, previous) {
+/** Regroupe tout ce qu'une période raconte : indicateurs, coût, dépassements. */
+function summarise(rows, spanDays) {
+  const step = state.dataset.stepHours;
+  const base = data.kpis(rows, step);
+  const cost = tariff.costs(rows, step, state.tariff, spanDays);
+  const over = tariff.overruns(data.totalCurve(rows), step, state.tariff);
+  return {
+    ...base,
+    cost,
+    over,
+    total: cost.energyCost + cost.subscription + (over ? over.cost : 0),
+  };
+}
+
+function neutralDelta(text) {
+  const box = document.createElement("div");
+  box.className = "delta is-neutral";
+  box.textContent = text;
+  return box;
+}
+
+/** Tuile « dépassements » — ou, tant que la puissance souscrite est inconnue,
+ *  la puissance qu'il faudrait viser. */
+function overrunTile(current, previous, optimal) {
+  if (!current.over) {
+    return tile(
+      "Puissance à viser",
+      optimal ? fmt(optimal) : "—",
+      "kW",
+      "dépassée 1 % du temps — renseignez votre puissance souscrite",
+      null,
+    );
+  }
+  const caption = `jusqu'à +${fmt(current.over.maxOver)} kW · optimum ≈ ${fmt(optimal)} kW`;
+  const delta = previous?.over
+    ? (previous.over.hours === 0
+        ? neutralDelta("aucun dépassement sur la période précédente")
+        : deltaLine(current.over.hours, previous.over.hours, "lower"))
+    : null;
+  return tile("Dépassements", fmt(current.over.hours, 1), "h", caption, delta);
+}
+
+function costTile(current, previous) {
+  const parts = [`énergie ${fmt(current.cost.energyCost)} €`];
+  if (current.cost.subscription > 0) parts.push(`abonnement ${fmt(current.cost.subscription)} €`);
+  if (current.over && current.over.cost > 0) {
+    parts.push(`dépassements ${fmt(current.over.cost)} €`);
+  }
+  return tile("Coût estimé", fmt(current.total), "€", parts.join(" · "),
+    deltaLine(current.total, previous?.total, "lower"));
+}
+
+function renderKpis(current, previous, optimal) {
   const energy = humanEnergy(current.energy);
-  const tiles = [
-    tile("Énergie consommée", energy.value, energy.unit, "sur la période affichée",
+  const split = current.cost.energyHp + current.cost.energyHc;
+  const hcShare = split ? (current.cost.energyHc / split) * 100 : 0;
+  const energyCaption = state.tariff.hcStart === state.tariff.hcEnd
+    ? "sur la période affichée"
+    : `dont ${fmt(hcShare)} % en heures creuses`;
+
+  nodes.kpis.replaceChildren(
+    tile("Énergie consommée", energy.value, energy.unit, energyCaption,
       deltaLine(current.energy, previous?.energy, "lower")),
     tile("Puissance de pointe", fmt(current.peak), "kW",
       current.peakAt ? stampLong(current.peakAt) : "—",
@@ -225,11 +358,9 @@ function renderKpis(current, previous) {
       deltaLine(current.mean, previous?.mean, "lower")),
     tile("Facteur de charge", fmt(current.loadFactor, 1), "%", "moyenne ÷ pointe",
       deltaLine(current.loadFactor, previous?.loadFactor, "higher")),
-    tile("Coût estimé", fmt(current.cost), "€",
-      `à ${fmt(data.PRICE_EUR_PER_KWH, 2)} €/kWh`,
-      deltaLine(current.cost, previous?.cost, "lower")),
-  ];
-  nodes.kpis.replaceChildren(...tiles);
+    overrunTile(current, previous, optimal),
+    costTile(current, previous),
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -264,9 +395,10 @@ function render() {
   nodes.chip.textContent = `${ds.source} · ${fmt(ds.rows.length)} mesures · `
     + `pas de ${fmt(ds.stepHours * 60)} min`;
 
+  const spanDays = (state.end - state.start) / 86400000 + 1;
   const current = data.slicePeriod(ds.rows, state.start, state.end, state.sites);
   if (!current.length) {
-    renderKpis(data.kpis([], ds.stepHours), null);
+    renderKpis(summarise([], spanDays), null, null);
     for (const id of ["fig-power", "fig-energy", "fig-duration", "fig-profile"]) {
       draw(id, figures.empty());
     }
@@ -277,12 +409,16 @@ function render() {
   const previous = data.previousPeriod(ds.rows, state.start, state.end, state.sites);
   const agg = data.aggregate(current, state.freq, ds.stepHours);
   const energyAgg = data.aggregate(current, ENERGY_FREQ[state.freq], ds.stepHours);
+  const duration = data.loadDuration(current);
 
-  renderKpis(data.kpis(current, ds.stepHours),
-    previous.length ? data.kpis(previous, ds.stepHours) : null);
+  renderKpis(
+    summarise(current, spanDays),
+    previous.length ? summarise(previous, spanDays) : null,
+    tariff.optimalPower(duration, 1),
+  );
   draw("fig-power", figures.powerTimeseries(agg, colors));
   draw("fig-energy", figures.energyBars(energyAgg, colors));
-  draw("fig-duration", figures.loadDurationCurve(data.loadDuration(current)));
+  draw("fig-duration", figures.loadDurationCurve(duration, state.tariff.subscribedKw));
   draw("fig-profile", figures.loadProfile(data.heatMatrix(current)));
   renderTable(agg, state.freq);
 }
@@ -291,7 +427,16 @@ function render() {
 // Démarrage
 // --------------------------------------------------------------------------
 async function boot() {
+  const config = embeddedConfig();
+  if (config) applyExportConfig(config); // avant les champs : le tarif est déjà à jour
+  buildTariffFields();
   wireControls();
+
+  const csv = embeddedCsv();
+  if (csv) {
+    adopt(new data.Dataset(data.parse(csv), config?.source || "données embarquées"));
+    return;
+  }
   // ?data=<url> permet de pointer la page vers un autre relevé sans la modifier.
   const url = new URLSearchParams(location.search).get("data") || DEFAULT_CSV;
   try {

@@ -129,7 +129,7 @@ body {
 .arrow { color: var(--ink-muted); }
 
 /* Champs natifs : habillés une fois pour toutes, à spécificité zéro. */
-:where(input[type="date"], input[type="text"], select) {
+:where(input[type="date"], input[type="number"], input[type="text"], select) {
   appearance: none;
   background: var(--surface-2);
   color: var(--ink);
@@ -224,6 +224,33 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 }
 .feedback.is-ok { color: var(--good); }
 .feedback.is-error { color: var(--critical); }
+
+/* --- Paramètres tarifaires ----------------------------------------------- */
+.tariff-block {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3);
+  box-shadow: var(--elev-1);
+}
+.tariff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.tariff-field { display: flex; flex-direction: column; gap: 4px; }
+.tariff-field label {
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.tariff-input { display: flex; align-items: center; gap: var(--sp-1); }
+.tariff-input input { width: 100%; }
+.tariff-input .unit { color: var(--ink-muted); font-size: var(--fs-sm); white-space: nowrap; }
+.tariff-note { font-size: var(--fs-sm); color: var(--ink-muted); margin: var(--sp-3) 0 0; }
+.tariff-note strong { color: var(--ink-2); font-weight: 600; }
 
 /* --- Indicateurs --------------------------------------------------------- */
 .kpis {
@@ -346,7 +373,13 @@ tbody td {
 tbody td:nth-child(2) { color: var(--ink); }
 th.num, td.num { text-align: right; }
 
+/* Livrable autonome : les boutons de chargement n'ont plus lieu d'être. */
+.is-export .filter--data,
+.is-export .footer-tool { display: none; }
+.export-note { color: var(--ink-2); }
+
 .page-footer { color: var(--ink-muted); font-size: var(--fs-sm); padding-top: var(--sp-2); }
+.page-footer p + p { margin-top: 4px; }
 .page-footer p { margin: 0; }
 .page-footer code {
   background: var(--surface-2);
