@@ -8,7 +8,7 @@
 <!-- Icône d'onglet en URL de données : elle suit le fichier, donc le livrable
      autonome l'emporte avec lui sans requête ni fichier voisin. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%231a1a19'/%3E%3Cpath%20d='M5%2023h5v-9h6v13h6v-8h5'%20fill='none'%20stroke='%233987e5'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=7">
+<link rel="stylesheet" href="css/style.css?v=10">
 <!-- plotly.js embarqué dans le dépôt (voir vendor/LISEZ-MOI.md) : la page
      fonctionne hors ligne et la version ne bouge pas sans qu'on le décide.
      Le lot « cartesian » suffit (1,5 Mo au lieu de 4,3 Mo). L'ordre compte :
@@ -244,12 +244,37 @@
     </div>
   </details>
 
+  <!-- Vue agrandie : la figure occupe l'écran, et le panneau dit comment elle
+       est calculée. Le même panneau sert seul aux indicateurs (pas de figure). -->
+  <dialog class="zoom" id="zoom" aria-labelledby="zoom-title">
+    <header class="zoom-head">
+      <div class="zoom-heading">
+        <span class="eyebrow" id="zoom-eyebrow"></span>
+        <h2 class="card-title" id="zoom-title"></h2>
+      </div>
+      <div class="zoom-nav">
+        <button class="icon-btn" id="zoom-prev" aria-label="Figure précédente"
+                title="Figure précédente (←)">‹</button>
+        <button class="icon-btn" id="zoom-next" aria-label="Figure suivante"
+                title="Figure suivante (→)">›</button>
+        <button class="icon-btn" id="zoom-close" aria-label="Fermer"
+                title="Fermer (Échap)">✕</button>
+      </div>
+    </header>
+    <div class="zoom-body">
+      <div class="zoom-slot" id="zoom-slot"><div class="graph" id="zoom-graph"></div></div>
+      <aside class="method" id="zoom-method" aria-label="Méthode de calcul"></aside>
+    </div>
+  </dialog>
+
   <footer class="page-footer">
+    <p>Cliquez sur un graphique pour l'agrandir et lire comment il est calculé ;
+       le même détail est disponible sur chaque indicateur.</p>
     <p class="footer-tool">Les calculs se font dans votre navigateur : le fichier que vous chargez ne quitte pas votre ordinateur.
        Colonnes attendues : <code>timestamp</code>, <code>site</code>, <code>power_kw</code>.</p>
   </footer>
 </div>
 
-<script type="module" src="js/app.js?v=7"></script>
+<script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>

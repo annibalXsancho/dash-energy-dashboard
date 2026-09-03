@@ -61,6 +61,19 @@ d'occupation et les arrêts machine d'un client.
   cache : sans numéro de version sur chaque import, une correction reste
   invisible et on cherche un bug qui n'existe pas. Lancer
   `python3 scripts/bump_version.py` après toute modification de `js/` ou `css/`.
+- **Un clic dans un graphique Plotly ne se distingue d'un panoramique que par
+  la distance parcourue.** `dragmode: "pan"` fait qu'un déplacement produit lui
+  aussi un `click` : la vue agrandie ne s'ouvre que si le pointeur a bougé de
+  moins de 4 px entre `pointerdown` et `click`, et jamais depuis la barre
+  d'outils, la légende ou l'échelle de couleur. L'écoute se fait en phase de
+  **capture** — Plotly écoute avant nous.
+- **Une figure dans un `<dialog>` a besoin d'une hauteur explicite.** Une grille
+  sans `grid-template-rows: minmax(0, 1fr)` donne au conteneur la hauteur de son
+  contenu, c'est-à-dire zéro, et Plotly dessine sur zéro pixel. Le tracé se fait
+  après `showModal()`, suivi d'un `Plotly.Plots.resize` à l'image suivante.
+- **Ne pas rejouer une mise en page déjà passée à Plotly** : il y inscrit les
+  bornes d'axes au fil des déplacements. La vue agrandie garde donc la
+  *fabrique* de chaque figure (`figureBuilders` dans `js/app.js`), pas la figure.
 - **`[hidden]` ne masque pas un `display: flex`** — d'où la règle globale
   `[hidden] { display: none !important; }` dans `css/style.css`.
 - **Carte de chaleur : l'écart entre cellules (`xgap`) doit disparaître au-delà

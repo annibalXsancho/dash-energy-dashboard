@@ -101,6 +101,16 @@ export const GRAPH_CONFIG = {
   toImageButtonOptions: { format: "png", scale: 2 },
 };
 
+/** La même figure, en grand. On y gagne ce qu'une vignette ne permettait pas :
+ *  la molette zoome, la barre d'outils reste affichée, et le rectangle de zoom
+ *  redevient disponible — c'est la vue où l'on va chercher un détail. */
+export const ZOOM_CONFIG = {
+  ...GRAPH_CONFIG,
+  scrollZoom: true,
+  displayModeBar: true,
+  modeBarButtonsToRemove: ["select2d", "lasso2d", "toggleSpikelines"],
+};
+
 /** Une couleur fixe par site, attribuée sur la liste COMPLÈTE des sites.
  *  Filtrer ne doit jamais repeindre les séries restantes. */
 export function colorMap(allSites) {

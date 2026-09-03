@@ -13,7 +13,7 @@
 // le matin chauffe et l'après-midi non, l'écart entre les deux est du simple
 // au double.
 
-import { isoDay } from "./format.js?v=7";
+import { isoDay } from "./format.js?v=10";
 
 const CONFIG_KEY = "energie.meteo.v1";
 const CACHE_KEY = "energie.meteo.cache.v1";

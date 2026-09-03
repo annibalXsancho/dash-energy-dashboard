@@ -1,12 +1,13 @@
 // Assemblage : état, contrôles, rendu. C'est le seul module qui touche au DOM
 // et le seul qui connaisse à la fois les données et les figures.
 
-import * as data from "./data.js?v=7";
-import * as figures from "./figures.js?v=7";
-import * as theme from "./theme.js?v=7";
-import * as tariff from "./tariff.js?v=7";
-import * as weather from "./weather.js?v=7";
-import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=7";
+import * as data from "./data.js?v=10";
+import * as figures from "./figures.js?v=10";
+import * as theme from "./theme.js?v=10";
+import * as tariff from "./tariff.js?v=10";
+import * as weather from "./weather.js?v=10";
+import * as methods from "./methods.js?v=10";
+import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=10";
 
 const DEFAULT_CSV = "data/sample_energy.csv";
 const SHEETJS_SRC = "vendor/xlsx-0.20.3.full.min.js";
@@ -68,6 +69,18 @@ const nodes = {
   weatherStatus: el("weather-status"),
   tableBody: document.querySelector("#data-table tbody"),
   tableNote: el("table-note"),
+};
+
+const zoomNodes = {
+  dialog: el("zoom"),
+  eyebrow: el("zoom-eyebrow"),
+  title: el("zoom-title"),
+  slot: el("zoom-slot"),
+  graph: el("zoom-graph"),
+  method: el("zoom-method"),
+  prev: el("zoom-prev"),
+  next: el("zoom-next"),
+  close: el("zoom-close"),
 };
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -798,7 +811,7 @@ function deltaLine(current, previous, better = "lower") {
   return box;
 }
 
-function tile(label, value, unit, caption, delta) {
+function tile(label, value, unit, caption, delta, methodKey) {
   const box = document.createElement("div");
   box.className = "tile";
   box.innerHTML = `<span class="eyebrow">${label}</span>`
@@ -806,6 +819,7 @@ function tile(label, value, unit, caption, delta) {
     + `<span class="stat-unit">${unit}</span></div>`
     + `<div class="stat-caption">${caption}</div>`;
   if (delta) box.append(delta);
+  if (methodKey) box.append(methodButton(methodKey, label));
   return box;
 }
 
@@ -840,6 +854,7 @@ function overrunTile(current, previous, optimal) {
       "kW",
       "dépassée 1 % du temps — renseignez votre puissance souscrite",
       null,
+      "kpi-overrun",
     );
   }
   const caption = `jusqu'à +${fmt(current.over.maxOver)} kW · optimum ≈ ${fmt(optimal)} kW`;
@@ -848,7 +863,7 @@ function overrunTile(current, previous, optimal) {
         ? neutralDelta("aucun dépassement sur la période précédente")
         : deltaLine(current.over.hours, previous.over.hours, "lower"))
     : null;
-  return tile("Dépassements", fmt(current.over.hours, 1), "h", caption, delta);
+  return tile("Dépassements", fmt(current.over.hours, 1), "h", caption, delta, "kpi-overrun");
 }
 
 function costTile(current, previous) {
@@ -858,7 +873,7 @@ function costTile(current, previous) {
     parts.push(`dépassements ${fmt(current.over.cost)} €`);
   }
   return tile("Coût estimé", fmt(current.total), "€", parts.join(" · "),
-    deltaLine(current.total, previous?.total, "lower"));
+    deltaLine(current.total, previous?.total, "lower"), "kpi-cost");
 }
 
 /** Rigueur climatique de la période, et celle de la période précédente.
@@ -871,7 +886,8 @@ function climateTile(climate) {
   const previous = climate.previous
     ? neutralDelta(`${fmt(climate.previous.dju)} ${unit} sur la période précédente`)
     : neutralDelta("période précédente indisponible");
-  return tile("Rigueur climatique", fmt(climate.current.dju), unit, caption, previous);
+  return tile("Rigueur climatique", fmt(climate.current.dju), unit, caption, previous,
+    "kpi-climate");
 }
 
 /** L'écart de consommation une fois le climat neutralisé — la tuile qui dit si
@@ -890,6 +906,7 @@ function adjustedTile(climate) {
       `${fmt(climate.current.energyPerDay)} kWh/j observés, `
       + `${fmt(adjusted.adjustedPerDay)} attendus au climat de la période`,
     ),
+    "kpi-adjusted",
   );
   return box;
 }
@@ -904,14 +921,14 @@ function renderKpis(current, previous, optimal, climate) {
 
   nodes.kpis.replaceChildren(
     tile("Énergie consommée", energy.value, energy.unit, energyCaption,
-      deltaLine(current.energy, previous?.energy, "lower")),
+      deltaLine(current.energy, previous?.energy, "lower"), "kpi-energy"),
     tile("Puissance de pointe", fmt(current.peak), "kW",
       current.peakAt ? stampLong(current.peakAt) : "—",
-      deltaLine(current.peak, previous?.peak, "lower")),
+      deltaLine(current.peak, previous?.peak, "lower"), "kpi-peak"),
     tile("Puissance moyenne", fmt(current.mean), "kW", "tous sites confondus",
-      deltaLine(current.mean, previous?.mean, "lower")),
+      deltaLine(current.mean, previous?.mean, "lower"), "kpi-mean"),
     tile("Facteur de charge", fmt(current.loadFactor, 1), "%", "moyenne ÷ pointe",
-      deltaLine(current.loadFactor, previous?.loadFactor, "higher")),
+      deltaLine(current.loadFactor, previous?.loadFactor, "higher"), "kpi-loadfactor"),
     overrunTile(current, previous, optimal),
     costTile(current, previous),
   );
@@ -1007,7 +1024,7 @@ function renderClimate(climate) {
       + `sur ${fmt(model.n)} ${climate.grain === "semaine" ? "semaines" : "journées"}`
     : `Consommation insensible à la température sur ce relevé (${fmt(points)} points) :`
       + " le nuage ne dessine aucune droite exploitable, et rien n'est corrigé du climat.";
-  draw("fig-signature", figures.energySignature(
+  draw("fig-signature", () => figures.energySignature(
     climate.inside, climate.outside, model, unit, climate.grain,
   ));
 
@@ -1015,18 +1032,222 @@ function renderClimate(climate) {
   el("hint-expected").textContent = `Attendu = ${fmt(model.perDay)} kWh + ${fmt(model.slope)} kWh`
     + ` × ${unit} du jour. Au-dessus du trait, la journée a consommé plus que le temps`
     + " ne l'explique.";
-  draw("fig-expected", figures.climateExpectation(
+  draw("fig-expected", () => figures.climateExpectation(
     climate.currentCells, { slope: model.slope, intercept: model.perDay }, climate.mode,
   ));
 }
 
 // --------------------------------------------------------------------------
-// Rendu complet
+// Agrandissement et méthodes de calcul
 // --------------------------------------------------------------------------
-function draw(id, figure) {
+/** La recette de chaque figure du dernier rendu, pour la redessiner en grand.
+ *  On garde la FABRIQUE et non la figure : Plotly s'approprie la mise en page
+ *  qu'on lui passe (il y inscrit les bornes d'axes au fil des déplacements),
+ *  et rejouer cet objet dans la fenêtre agrandie y importerait les zooms de la
+ *  vignette. Refabriquer coûte quelques millisecondes sur des données déjà
+ *  agrégées. */
+const figureBuilders = new Map();
+let zoomKey = null;
+// Plotly dessine en plusieurs temps (il repasse sur les marges automatiques une
+// fois les étiquettes mesurées) et le signale par une promesse. Relâcher le
+// tracé avant la fin de ce travail le fait trébucher sur une figure qui n'existe
+// plus — d'où cette file d'attente d'un seul cran.
+let zoomDrawn = Promise.resolve();
+
+function draw(id, make) {
+  figureBuilders.set(id, make);
+  const figure = make();
   Plotly.react(el(id), figure.data, figure.layout, theme.GRAPH_CONFIG);
 }
 
+/** Les figures agrandissables à cet instant : celles que le dernier rendu a
+ *  dessinées, et dont la carte n'est pas masquée (sans météo, la signature
+ *  énergétique n'existe pas). */
+function zoomableKeys() {
+  return methods.FIGURE_KEYS.filter((key) => {
+    const card = el(key)?.closest(".card");
+    return figureBuilders.has(key) && card && !card.hidden;
+  });
+}
+
+/** Ce que la figure regarde en ce moment — la méthode ne vaut que rapportée à
+ *  la sélection sur laquelle elle s'applique. */
+function contextRows() {
+  const ds = state.dataset;
+  if (!ds) return [];
+  const day = (d) => d.toLocaleDateString("fr-FR");
+  const chosen = state.sites.length ? state.sites : ds.sites;
+  const rows = [
+    ["Période affichée", `${day(state.start)} → ${day(state.end)}`],
+    ["Granularité", data.GRANULARITIES[state.freq]],
+    ["Pas du relevé", `${fmt(ds.stepHours * 60)} min`],
+    [
+      chosen.length > 1 ? "Sites retenus" : "Site retenu",
+      chosen.length <= 3 ? chosen.join(", ") : `${fmt(chosen.length)} sur ${fmt(ds.sites.length)}`,
+    ],
+    ["Source", ds.source],
+  ];
+  return rows;
+}
+
+function contextBlock() {
+  const box = document.createElement("div");
+  box.className = "method-context";
+  for (const [label, value] of contextRows()) {
+    const line = document.createElement("div");
+    const key = document.createElement("span");
+    key.className = "ctx-label";
+    key.textContent = label;
+    const val = document.createElement("span");
+    val.className = "ctx-value";
+    val.textContent = value; // nom de site, nom de fichier : jamais interprété
+    line.append(key, val);
+    box.append(line);
+  }
+  return box;
+}
+
+/** Le panneau de méthode. Les puces viennent de js/methods.js, écrites à la
+ *  main : elles seules ont droit au balisage. Tout ce qui vient du fichier
+ *  chargé passe par `textContent` (voir contextBlock). */
+function methodPanel(doc) {
+  const panel = document.createDocumentFragment();
+  const lead = document.createElement("p");
+  lead.className = "method-lead";
+  lead.textContent = doc.lead;
+  panel.append(lead, contextBlock());
+  for (const section of doc.sections) {
+    const heading = document.createElement("h3");
+    heading.textContent = section.heading;
+    const list = document.createElement("ul");
+    for (const item of section.items) {
+      const li = document.createElement("li");
+      li.innerHTML = item;
+      list.append(li);
+    }
+    panel.append(heading, list);
+  }
+  return panel;
+}
+
+/** Ouvre la vue agrandie sur une figure, ou le seul panneau de méthode pour un
+ *  indicateur (qui n'a pas de figure à montrer). */
+function openZoom(key) {
+  const doc = methods.METHODS[key];
+  if (!doc) return;
+  const make = figureBuilders.get(key);
+  zoomKey = key;
+  zoomNodes.dialog.classList.toggle("is-method-only", !make);
+  zoomNodes.slot.hidden = !make;
+  zoomNodes.eyebrow.textContent = make ? "Figure agrandie" : "Indicateur";
+  zoomNodes.title.textContent = doc.title;
+  zoomNodes.method.replaceChildren(methodPanel(doc));
+
+  const siblings = make ? zoomableKeys() : [];
+  zoomNodes.prev.hidden = siblings.length < 2;
+  zoomNodes.next.hidden = siblings.length < 2;
+
+  if (!zoomNodes.dialog.open) zoomNodes.dialog.showModal();
+  if (!make) {
+    releaseZoomGraph();
+    return;
+  }
+  const figure = make();
+  zoomDrawn = Plotly
+    .react(zoomNodes.graph, figure.data, figure.layout, theme.ZOOM_CONFIG)
+    // La boîte de dialogue venait d'apparaître : sa hauteur n'était pas encore
+    // connue au moment du tracé. On redonne ses mesures à Plotly une fois la
+    // mise en page faite.
+    .then(() => { if (zoomNodes.dialog.open) Plotly.Plots.resize(zoomNodes.graph); })
+    .catch(() => { /* figure remplacée entre-temps : rien à redimensionner */ });
+}
+
+/** Relâche la figure agrandie — mais seulement une fois son dessin terminé, et
+ *  seulement si elle n'a pas été rouverte entre-temps. */
+function releaseZoomGraph() {
+  zoomDrawn = zoomDrawn
+    .then(() => {
+      if (!zoomNodes.dialog.open || zoomNodes.slot.hidden) Plotly.purge(zoomNodes.graph);
+    })
+    .catch(() => { /* rien à relâcher */ });
+}
+
+/** Figure suivante ou précédente, en tournant en rond. */
+function stepZoom(offset) {
+  const keys = zoomableKeys();
+  const at = keys.indexOf(zoomKey);
+  if (at === -1 || keys.length < 2) return;
+  openZoom(keys[(at + offset + keys.length) % keys.length]);
+}
+
+/** Le bouton « comment est-ce calculé » d'une tuile d'indicateur. */
+function methodButton(key, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "icon-btn tile-method";
+  button.textContent = "ⓘ";
+  button.title = `Comment « ${label} » est calculé`;
+  button.setAttribute("aria-label", button.title);
+  button.addEventListener("click", () => openZoom(key));
+  return button;
+}
+
+function wireZoom() {
+  for (const graph of document.querySelectorAll(".charts .graph")) {
+    const key = graph.id;
+    if (!methods.METHODS[key]) continue;
+    const head = graph.closest(".card").querySelector(".card-head");
+    const label = head.querySelector(".card-title").textContent.trim();
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "icon-btn card-expand";
+    button.textContent = "⤢";
+    button.title = `Agrandir « ${label} » et lire sa méthode de calcul`;
+    button.setAttribute("aria-label", button.title);
+    button.addEventListener("click", () => openZoom(key));
+    head.append(button);
+
+    // Cliquer DANS le graphique l'ouvre aussi. Deux précautions : un
+    // déplacement de la souris est un panoramique, pas un clic ; et la barre
+    // d'outils, la légende et l'échelle de couleur gardent leur propre rôle.
+    // La phase de capture est nécessaire — Plotly écoute avant nous.
+    const slot = graph.closest(".graph-slot");
+    let down = null;
+    slot.addEventListener("pointerdown", (event) => {
+      down = [event.clientX, event.clientY];
+    }, true);
+    slot.addEventListener("click", (event) => {
+      const from = down;
+      down = null;
+      if (!from || Math.hypot(event.clientX - from[0], event.clientY - from[1]) > 4) return;
+      if (event.target.closest(".modebar, .legend, .colorbar")) return;
+      openZoom(key);
+    }, true);
+  }
+
+  zoomNodes.close.addEventListener("click", () => zoomNodes.dialog.close());
+  zoomNodes.prev.addEventListener("click", () => stepZoom(-1));
+  zoomNodes.next.addEventListener("click", () => stepZoom(1));
+  // Clic sur le fond assombri : la cible est alors la boîte elle-même.
+  zoomNodes.dialog.addEventListener("click", (event) => {
+    if (event.target === zoomNodes.dialog) zoomNodes.dialog.close();
+  });
+  zoomNodes.dialog.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft") stepZoom(-1);
+    if (event.key === "ArrowRight") stepZoom(1);
+  });
+  // « Échap » ferme d'office : on relâche la figure agrandie plutôt que de
+  // garder deux tracés vivants pour le même jeu de données.
+  zoomNodes.dialog.addEventListener("close", () => {
+    zoomKey = null;
+    releaseZoomGraph();
+  });
+}
+
+// --------------------------------------------------------------------------
+// Rendu complet
+// --------------------------------------------------------------------------
 function render() {
   const ds = state.dataset;
   const colors = theme.colorMap(ds.sites); // attribution stable, tous sites confondus
@@ -1038,7 +1259,7 @@ function render() {
   if (!current.length) {
     renderKpis(summarise([], spanDays), null, null, null);
     for (const id of ["fig-power", "fig-energy", "fig-duration", "fig-profile"]) {
-      draw(id, figures.empty());
+      draw(id, () => figures.empty());
     }
     renderClimate(null);
     renderTable([], state.freq);
@@ -1057,10 +1278,10 @@ function render() {
     tariff.optimalPower(duration, 1),
     climate,
   );
-  draw("fig-power", figures.powerTimeseries(agg, colors));
-  draw("fig-energy", figures.energyBars(energyAgg, colors));
-  draw("fig-duration", figures.loadDurationCurve(duration, state.tariff.subscribedKw));
-  draw("fig-profile", figures.loadProfile(data.heatMatrix(current)));
+  draw("fig-power", () => figures.powerTimeseries(agg, colors));
+  draw("fig-energy", () => figures.energyBars(energyAgg, colors));
+  draw("fig-duration", () => figures.loadDurationCurve(duration, state.tariff.subscribedKw));
+  draw("fig-profile", () => figures.loadProfile(data.heatMatrix(current)));
   renderClimate(climate);
   renderTable(agg, state.freq);
 }
@@ -1074,6 +1295,7 @@ async function boot() {
   buildTariffFields();
   wireWeather();
   wireControls();
+  wireZoom();
 
   const csv = embeddedCsv();
   if (csv) {

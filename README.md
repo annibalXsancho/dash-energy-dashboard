@@ -365,6 +365,13 @@ désignation de colonnes, l'Excel et les liens n'existent que dans la page web.
 
 Le repli **« Voir les données »** affiche les mêmes chiffres en tableau.
 
+**Un clic sur un graphique l'ouvre en grand**, avec à côté la méthode de calcul :
+ce qui est agrégé, avec quelle formule, et ce que la figure ne dit pas. Les
+flèches ‹ › passent d'une figure à l'autre, « Échap » referme. Chaque indicateur
+porte le même repère (ⓘ) et ouvre le même panneau. Le livrable autonome emporte
+ces textes avec lui : le client peut vérifier d'où sortent les chiffres sans
+vous appeler.
+
 ---
 
 ## Organisation du code
@@ -376,6 +383,7 @@ js/theme.js                  couleurs, gabarit des figures
 js/format.js                 nombres et dates à la française
 js/data.js                   lecture CSV, filtres, agrégation, indicateurs
 js/figures.js                les six graphiques
+js/methods.js                ce que chaque figure et chaque indicateur calcule
 js/app.js                    état, contrôles, rendu
 
 app.py                       l'application Dash
@@ -398,7 +406,8 @@ requirements.txt             les trois dépendances Python
 
 Même découpage des deux côtés : **`data` calcule, `figures` dessine, le reste
 dispose et relie.** Pour ajouter un graphique : une fonction dans `figures`, une
-carte dans la page, un appel dans le rendu.
+carte dans la page, un appel dans le rendu — et une entrée dans `methods`, qui
+porte le texte de la vue agrandie.
 
 ## Personnaliser
 
@@ -408,6 +417,7 @@ carte dans la page, un appel dans le rendu.
 | Couleurs | `js/theme.js` **et** `css/style.css` | `src/theme.py` **et** `assets/style.css` |
 | Granularités proposées | `GRANULARITIES` dans `js/data.js` | `src/data.py` |
 | Période affichée au démarrage | `adopt()` dans `js/app.js` | `filter_bar()` dans `src/components.py` |
+| Texte des méthodes de calcul | `METHODS` dans `js/methods.js` | — |
 
 Après toute modification de `js/` ou `css/`, lancez
 `python3 scripts/bump_version.py` : servie en local, la page garde sinon ses

@@ -9,7 +9,7 @@ s'ouvre par double-clic, fonctionne sans réseau, et n'envoie rien nulle part :
 c'est ce qu'on envoie au client, jamais un lien vers un site public.
 
 Pourquoi un assembleur maison plutôt qu'un outil de build : la machine n'a pas
-Node. Les sept modules ES du dossier js/ sont donc recousus ici en un seul script
+Node. Les huit modules ES du dossier js/ sont donc recousus ici en un seul script
 classique — chaque module devient une fonction anonyme qui renvoie ce qu'il
 exportait, et les `import` deviennent des variables locales.
 """
@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Ordre de dépendance : un module ne peut importer que ceux qui le précèdent.
-MODULES = ["theme", "format", "data", "tariff", "weather", "figures", "app"]
+MODULES = ["theme", "format", "methods", "data", "tariff", "weather", "figures", "app"]
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
