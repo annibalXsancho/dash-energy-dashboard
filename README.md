@@ -122,6 +122,12 @@ graphiques morts.
 Options : `--titre`, `--out`, `--prix-hp`, `--prix-hc`, `--hc 22-6`,
 `--penalite`. Les paramètres tarifaires sont gravés dans le document.
 
+`--meteo "Roubaix"` ajoute le volet climatique : les températures de la commune
+sur la durée du relevé sont téléchargées **à la fabrication**, sur votre
+machine, et écrites dans le fichier. Le document envoyé au client refait les
+degrés-jours tout seul, hors ligne, sans jamais rappeler personne.
+(`--base-dju 18`, `--sens auto|chauffage|froid` pour forcer le calcul.)
+
 *(Le fichier n'a pas de dépendance externe — vérifié : aucune requête réseau au
 chargement. Ouvrez-en un par double-clic avant le premier envoi client, c'est le
 seul test que je n'ai pas pu faire à votre place.)*
@@ -147,6 +153,56 @@ Ce qu'il en sort :
 Les pénalités sont un **ordre de grandeur** — la formule réelle du TURPE dépend
 du contrat. Assez pour dire « votre puissance souscrite est mal calée », pas
 pour refaire une facture.
+
+---
+
+## Météo : degrés-jours et correction climatique
+
+Le panneau **Météo et rigueur climatique** demande une chose : la commune du
+site. Le reste suit — températures, degrés-jours, thermosensibilité, et la seule
+question qui compte en fin de mission : *« la baisse de consommation, c'est mon
+action ou c'est l'hiver ? »*
+
+**Ce qui en sort**
+
+- une tuile **Rigueur climatique** : les degrés-jours de la période, et ceux de
+  la période précédente pour comparer ;
+- une tuile **Écart corrigé du climat** : l'écart de consommation une fois les
+  deux périodes ramenées au même temps qu'il fait. Un « brut −15 % » qui devient
+  « corrigé −2 % » n'était qu'un hiver doux ; l'inverse est une économie que la
+  facture cachait ;
+- une **signature énergétique** : un point par semaine, degrés-jours en
+  abscisse, énergie en ordonnée. La pente est la **thermosensibilité** du site
+  (kWh par degré-jour), l'ordonnée à l'origine son **talon** — ce qu'il consomme
+  quand le climat ne demande rien ;
+- **Observé et attendu** : la consommation de chaque jour face à celle que le
+  climat laissait prévoir. Ce qui dépasse le trait ne s'explique pas par le
+  temps — c'est là qu'on va chercher.
+
+**Les partis pris**
+
+- Les degrés-jours suivent la **méthode Costic**, celle de Météo-France :
+  min/max de la journée et pondération, pas un simple écart à la moyenne.
+- La droite s'ajuste **par semaine** dès qu'il y a six semaines complètes. Au
+  pas journalier, le rythme hebdomadaire pèse plus lourd que la température :
+  sur un relevé de test dont on connaissait la réponse (talon 8 000 kWh/j,
+  350 kWh par DJU, week-ends au ralenti), l'ajustement journalier rendait R² =
+  0,14 et une pente de 249 ; l'hebdomadaire rend R² = 0,96 et 311, soit la
+  thermosensibilité réelle du relevé week-ends compris.
+- **Quand la droite ne tient pas debout, rien ne s'affiche.** Pente négative ou
+  R² sous 0,3 : la carte « observé / attendu » disparaît, aucune correction
+  n'est calculée, et le nuage dit en toutes lettres que le site ne réagit pas au
+  temps qu'il fait. C'est le cas d'un procédé industriel — et c'est un résultat
+  de diagnostic, pas une panne.
+- Les journées de relevé incomplètes sont écartées du croisement : le premier et
+  le dernier jour d'un export ne portent souvent que quelques heures, et leur
+  énergie tronquée simulerait une économie.
+
+**Ce qui circule.** Les températures viennent d'`open-meteo.com` (service
+public, sans clé ni compte). Ce qui part : la commune choisie et les dates du
+relevé. Ce qui ne part pas : **aucune mesure, aucun nom de site, aucun nom de
+fichier.** Les températures sont ensuite mémorisées dans le navigateur — seuls
+les jours manquants sont redemandés — et le livrable les emporte avec lui.
 
 ---
 
@@ -302,6 +358,10 @@ désignation de colonnes, l'Excel et les liens n'existent que dans la page web.
 | **Énergie par période** | Le cumul, empilé par site : qui pèse combien. |
 | **Monotone de charge** | Puissance atteinte ou dépassée en % du temps. Une marche haute à gauche = pointe brève et chère. |
 | **Profil de charge** | Puissance moyenne par heure et par jour : les habitudes et les anomalies sautent aux yeux. |
+| **Rigueur climatique** | Combien de degrés-jours la période a-t-elle demandés ? Le contexte sans lequel deux mois ne se comparent pas. |
+| **Écart corrigé du climat** | À temps identique, ai-je vraiment consommé moins ? La preuve d'économie, une fois la météo neutralisée. |
+| **Signature énergétique** | De combien la consommation monte-t-elle par degré-jour, et sur quel talon ? Le chauffage face au reste. |
+| **Observé et attendu** | Quels jours ont consommé plus que le temps ne l'expliquait ? |
 
 Le repli **« Voir les données »** affiche les mêmes chiffres en tableau.
 
@@ -315,7 +375,7 @@ css/style.css                son style
 js/theme.js                  couleurs, gabarit des figures
 js/format.js                 nombres et dates à la française
 js/data.js                   lecture CSV, filtres, agrégation, indicateurs
-js/figures.js                les quatre graphiques
+js/figures.js                les six graphiques
 js/app.js                    état, contrôles, rendu
 
 app.py                       l'application Dash
@@ -324,6 +384,7 @@ assets/style.css             le style de la version Dash
 
 Ouvrir le tableau de bord.command   lanceur : double-clic depuis le Finder
 js/tariff.js                 prix, heures creuses, puissance souscrite, dépassements
+js/weather.js                degrés-jours, signature énergétique, correction climatique
 vendor/                      plotly + lecteur Excel embarqués (voir vendor/LISEZ-MOI.md)
 scripts/build_export.py      fabrique un livrable HTML autonome
 scripts/bump_version.py      incrémente le ?v= des CSS/JS (à lancer après toute modification)

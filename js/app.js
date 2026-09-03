@@ -1,11 +1,12 @@
 // Assemblage : état, contrôles, rendu. C'est le seul module qui touche au DOM
 // et le seul qui connaisse à la fois les données et les figures.
 
-import * as data from "./data.js?v=5";
-import * as figures from "./figures.js?v=5";
-import * as theme from "./theme.js?v=5";
-import * as tariff from "./tariff.js?v=5";
-import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=5";
+import * as data from "./data.js?v=7";
+import * as figures from "./figures.js?v=7";
+import * as theme from "./theme.js?v=7";
+import * as tariff from "./tariff.js?v=7";
+import * as weather from "./weather.js?v=7";
+import { fmt, humanEnergy, stampLong, stampTable, isoDay, isoStamp } from "./format.js?v=7";
 
 const DEFAULT_CSV = "data/sample_energy.csv";
 const SHEETJS_SRC = "vendor/xlsx-0.20.3.full.min.js";
@@ -23,6 +24,9 @@ const state = {
   sites: [],
   freq: "h",
   tariff: tariff.load(), // mémorisé dans le navigateur d'un passage à l'autre
+  // Météo : la configuration est mémorisée, les températures sont retéléchargées
+  // (ou lues dans le livrable, et alors `embedded` interdit toute requête).
+  weather: { config: weather.load(), days: new Map(), embedded: false },
 };
 
 const el = (id) => document.getElementById(id);
@@ -54,6 +58,14 @@ const nodes = {
   mapName: el("map-name"),
   mapNameField: el("map-name-field"),
   exportCsv: el("export-csv"),
+  weatherBlock: el("weather-block"),
+  weatherPlace: el("weather-place"),
+  weatherSearch: el("weather-search"),
+  weatherForget: el("weather-forget"),
+  weatherResults: el("weather-results"),
+  weatherBase: el("weather-base"),
+  weatherMode: el("weather-mode"),
+  weatherStatus: el("weather-status"),
   tableBody: document.querySelector("#data-table tbody"),
   tableNote: el("table-note"),
 };
@@ -98,6 +110,13 @@ function embeddedConfig() {
 function applyExportConfig(config) {
   document.body.classList.add("is-export");
   if (config.tariff) state.tariff = { ...state.tariff, ...config.tariff };
+  if (config.weather) {
+    state.weather.config = { ...weather.DEFAULTS, ...config.weather };
+    state.weather.days = weather.daysFromEmbedded(config.weather.days);
+    state.weather.embedded = true;
+  } else {
+    nodes.weatherBlock.hidden = true; // sans températures, le panneau n'a rien à dire
+  }
   if (config.client) {
     document.querySelector(".topbar .eyebrow").textContent = config.client;
     document.title = `${config.client} — Énergie & puissance`;
@@ -462,6 +481,9 @@ function adopt(dataset, { message = "", tone = "" } = {}) {
   buildSiteChips();
   say(message, tone);
   render();
+  // Les températures arrivent après coup : la page est déjà lisible, elle
+  // gagne ses cartes climatiques quand la réponse revient.
+  loadWeather();
 }
 
 // --------------------------------------------------------------------------
@@ -512,6 +534,123 @@ function buildTariffFields() {
     });
     nodes.tariffFields.append(box);
   }
+}
+
+/** Panneau météo : commune, température de base, sens de la thermosensibilité.
+ *  Rien n'est téléchargé tant qu'aucune commune n'est choisie — la première
+ *  ouverture de la page ne parle à personne. */
+function wireWeather() {
+  const config = state.weather.config;
+  nodes.weatherPlace.value = config.place;
+  nodes.weatherBase.value = config.base;
+  nodes.weatherMode.value = config.mode;
+  nodes.weatherForget.hidden = !weather.isConfigured(config);
+  if (state.weather.embedded) {
+    weatherSay(`${config.place} — ${fmt(state.weather.days.size)} journées de température`
+      + " contenues dans ce fichier. Le calcul se refait ici, hors ligne.");
+  } else if (!weather.isConfigured(config)) {
+    weatherSay("Indiquez la commune du site pour croiser le relevé avec la température.");
+  }
+
+  nodes.weatherSearch.addEventListener("click", searchPlace);
+  nodes.weatherPlace.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); searchPlace(); }
+  });
+
+  // La base et le sens ne dépendent que du calcul : aucune requête, on
+  // recalcule sur place.
+  nodes.weatherBase.addEventListener("change", () => {
+    const value = Number(nodes.weatherBase.value);
+    config.base = Number.isFinite(value) ? value : weather.DEFAULTS.base;
+    nodes.weatherBase.value = config.base;
+    weather.save(config);
+    if (state.dataset) render();
+  });
+  nodes.weatherMode.addEventListener("change", () => {
+    config.mode = nodes.weatherMode.value;
+    weather.save(config);
+    if (state.dataset) render();
+  });
+
+  nodes.weatherForget.addEventListener("click", () => {
+    Object.assign(config, { place: "", lat: null, lon: null });
+    weather.save(config);
+    state.weather.days = new Map();
+    nodes.weatherPlace.value = "";
+    nodes.weatherResults.hidden = true;
+    nodes.weatherForget.hidden = true;
+    weatherSay("Commune retirée — le tableau de bord ignore de nouveau la météo.");
+    if (state.dataset) render();
+  });
+}
+
+function weatherSay(message, tone = "") {
+  nodes.weatherStatus.textContent = message;
+  nodes.weatherStatus.className = `tariff-note ${tone}`.trim();
+}
+
+async function searchPlace() {
+  const query = nodes.weatherPlace.value.trim();
+  if (!query) return;
+  nodes.weatherResults.hidden = true;
+  weatherSay(`Recherche de « ${query} »…`);
+  let hits;
+  try {
+    hits = await weather.search(query);
+  } catch (error) {
+    weatherSay(error.message, "is-error");
+    return;
+  }
+  if (!hits.length) {
+    weatherSay(`Aucune commune trouvée pour « ${query} ».`, "is-error");
+    return;
+  }
+  weatherSay(hits.length === 1
+    ? "Une commune trouvée — cliquez-la pour la retenir."
+    : `${hits.length} communes trouvées — cliquez la bonne.`);
+  nodes.weatherResults.replaceChildren();
+  for (const hit of hits) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = hit.label;
+    button.addEventListener("click", () => {
+      Object.assign(state.weather.config, { place: hit.label, lat: hit.lat, lon: hit.lon });
+      weather.save(state.weather.config);
+      nodes.weatherPlace.value = hit.label;
+      nodes.weatherResults.hidden = true;
+      nodes.weatherForget.hidden = false;
+      loadWeather();
+    });
+    nodes.weatherResults.append(button);
+  }
+  nodes.weatherResults.hidden = false;
+}
+
+/** Va chercher les températures couvrant le relevé courant, puis redessine.
+ *  Un échec ne bloque jamais rien : le tableau de bord perd ses deux cartes
+ *  climatiques et garde tout le reste. */
+async function loadWeather() {
+  const store = state.weather;
+  // Livrable autonome : les températures sont déjà dans le fichier, et il ne
+  // doit émettre aucune requête.
+  if (store.embedded || !state.dataset) return;
+  if (!weather.isConfigured(store.config)) {
+    store.days = new Map();
+    return;
+  }
+  weatherSay(`Températures de ${store.config.place} : chargement…`);
+  try {
+    store.days = await weather.daysFor(
+      store.config,
+      startOfDay(state.dataset.start),
+      startOfDay(state.dataset.end),
+    );
+    weatherSay(`${store.config.place} — ${fmt(store.days.size)} journées de température en mémoire.`);
+  } catch (error) {
+    store.days = new Map();
+    weatherSay(error.message, "is-error");
+  }
+  render();
 }
 
 function wireControls() {
@@ -722,7 +861,40 @@ function costTile(current, previous) {
     deltaLine(current.total, previous?.total, "lower"));
 }
 
-function renderKpis(current, previous, optimal) {
+/** Rigueur climatique de la période, et celle de la période précédente.
+ *  L'écart n'est ni bon ni mauvais — c'est le temps qu'il a fait : la tuile le
+ *  dit en toutes lettres plutôt qu'en vert ou en rouge. */
+function climateTile(climate) {
+  const unit = weather.unitLabel(climate.mode);
+  const caption = `base ${fmt(state.weather.config.base, 1)} °C · `
+    + `${weather.MODE_LABELS[climate.mode]} · ${state.weather.config.place || "commune choisie"}`;
+  const previous = climate.previous
+    ? neutralDelta(`${fmt(climate.previous.dju)} ${unit} sur la période précédente`)
+    : neutralDelta("période précédente indisponible");
+  return tile("Rigueur climatique", fmt(climate.current.dju), unit, caption, previous);
+}
+
+/** L'écart de consommation une fois le climat neutralisé — la tuile qui dit si
+ *  une action d'économie a produit quelque chose, ou si l'hiver a simplement
+ *  été plus doux. */
+function adjustedTile(climate) {
+  const adjusted = climate.adjusted;
+  if (!adjusted) return null;
+  const signed = (value) => `${value > 0 ? "+" : "\u2212"}${fmt(Math.abs(value), 1)}`;
+  const box = tile(
+    "Écart corrigé du climat",
+    signed(adjusted.change),
+    "%",
+    `à climat identique · écart brut ${signed(adjusted.rawChange)} %`,
+    neutralDelta(
+      `${fmt(climate.current.energyPerDay)} kWh/j observés, `
+      + `${fmt(adjusted.adjustedPerDay)} attendus au climat de la période`,
+    ),
+  );
+  return box;
+}
+
+function renderKpis(current, previous, optimal, climate) {
   const energy = humanEnergy(current.energy);
   const split = current.cost.energyHp + current.cost.energyHc;
   const hcShare = split ? (current.cost.energyHc / split) * 100 : 0;
@@ -743,6 +915,11 @@ function renderKpis(current, previous, optimal) {
     overrunTile(current, previous, optimal),
     costTile(current, previous),
   );
+  if (climate) {
+    nodes.kpis.append(climateTile(climate));
+    const adjusted = adjustedTile(climate);
+    if (adjusted) nodes.kpis.append(adjusted);
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -765,6 +942,85 @@ function renderTable(agg, freq) {
 }
 
 // --------------------------------------------------------------------------
+// Climat
+// --------------------------------------------------------------------------
+/** Croise le relevé et les températures : nuage de points, droite de
+ *  thermosensibilité, cumuls des deux périodes et écart corrigé.
+ *
+ *  La droite est ajustée sur TOUT le relevé (sites cochés compris), pas sur la
+ *  seule période affichée : sur sept jours, une pente n'a aucun sens, et c'est
+ *  pourtant cette fenêtre qu'on regarde le plus souvent.
+ */
+function climateOf(current, previous) {
+  const store = state.weather;
+  if (!store.days.size) return null;
+  const step = state.dataset.stepHours;
+  const base = store.config.base;
+
+  const scope = data.slicePeriod(state.dataset.rows, null, null, state.sites);
+  const allCells = weather.daily(scope, step, store.days, base);
+  if (allCells.length < 5) return null;
+
+  const mode = store.config.mode === "auto" ? weather.pickMode(allCells) : store.config.mode;
+  const sign = weather.signature(allCells, mode);
+  const currentCells = weather.daily(current, step, store.days, base);
+  const currentTotals = weather.totals(currentCells, mode);
+  const previousTotals = weather.totals(weather.daily(previous, step, store.days, base), mode);
+
+  // Le nuage porte tout le relevé ; la période affichée y est mise en avant.
+  const from = state.start.getTime();
+  const to = state.end.getTime() + 86400000;
+  const shown = (point) => point.t >= from && point.t < to;
+
+  return {
+    mode,
+    model: sign.model,
+    grain: sign.grain,
+    currentCells,
+    inside: sign.points.filter(shown),
+    outside: sign.points.filter((point) => !shown(point)),
+    current: currentTotals,
+    previous: previousTotals,
+    adjusted: weather.climateAdjusted(currentTotals, previousTotals, sign.model),
+  };
+}
+
+/** Les cartes climatiques.
+ *
+ *  Le nuage de points s'affiche dès qu'il y a des journées à croiser : quand un
+ *  site ne réagit pas au temps qu'il fait, c'est un résultat de diagnostic et
+ *  il se voit là. La carte « observé / attendu », elle, n'apparaît que si la
+ *  droite tient debout — sinon elle tracerait une attente inventée. */
+function renderClimate(climate) {
+  const enough = Boolean(climate)
+    && climate.inside.length + climate.outside.length >= 5;
+  const model = enough && weather.isUsable(climate.model) ? climate.model : null;
+  el("card-signature").hidden = !enough;
+  el("card-expected").hidden = !model;
+  if (!enough) return;
+
+  const unit = weather.unitLabel(climate.mode);
+  const points = climate.inside.length + climate.outside.length;
+  el("hint-signature").textContent = model
+    ? `${fmt(model.slope)} kWh par ${unit} au-delà d'un talon de `
+      + `${fmt(model.perDay)} kWh/j · R² = ${fmt(model.r2, 2)} `
+      + `sur ${fmt(model.n)} ${climate.grain === "semaine" ? "semaines" : "journées"}`
+    : `Consommation insensible à la température sur ce relevé (${fmt(points)} points) :`
+      + " le nuage ne dessine aucune droite exploitable, et rien n'est corrigé du climat.";
+  draw("fig-signature", figures.energySignature(
+    climate.inside, climate.outside, model, unit, climate.grain,
+  ));
+
+  if (!model) return;
+  el("hint-expected").textContent = `Attendu = ${fmt(model.perDay)} kWh + ${fmt(model.slope)} kWh`
+    + ` × ${unit} du jour. Au-dessus du trait, la journée a consommé plus que le temps`
+    + " ne l'explique.";
+  draw("fig-expected", figures.climateExpectation(
+    climate.currentCells, { slope: model.slope, intercept: model.perDay }, climate.mode,
+  ));
+}
+
+// --------------------------------------------------------------------------
 // Rendu complet
 // --------------------------------------------------------------------------
 function draw(id, figure) {
@@ -780,10 +1036,11 @@ function render() {
   const spanDays = (state.end - state.start) / 86400000 + 1;
   const current = data.slicePeriod(ds.rows, state.start, state.end, state.sites);
   if (!current.length) {
-    renderKpis(summarise([], spanDays), null, null);
+    renderKpis(summarise([], spanDays), null, null, null);
     for (const id of ["fig-power", "fig-energy", "fig-duration", "fig-profile"]) {
       draw(id, figures.empty());
     }
+    renderClimate(null);
     renderTable([], state.freq);
     return;
   }
@@ -793,15 +1050,18 @@ function render() {
   const energyAgg = data.aggregate(current, ENERGY_FREQ[state.freq], ds.stepHours);
   const duration = data.loadDuration(current);
 
+  const climate = climateOf(current, previous);
   renderKpis(
     summarise(current, spanDays),
     previous.length ? summarise(previous, spanDays) : null,
     tariff.optimalPower(duration, 1),
+    climate,
   );
   draw("fig-power", figures.powerTimeseries(agg, colors));
   draw("fig-energy", figures.energyBars(energyAgg, colors));
   draw("fig-duration", figures.loadDurationCurve(duration, state.tariff.subscribedKw));
   draw("fig-profile", figures.loadProfile(data.heatMatrix(current)));
+  renderClimate(climate);
   renderTable(agg, state.freq);
 }
 
@@ -812,6 +1072,7 @@ async function boot() {
   const config = embeddedConfig();
   if (config) applyExportConfig(config); // avant les champs : le tarif est déjà à jour
   buildTariffFields();
+  wireWeather();
   wireControls();
 
   const csv = embeddedCsv();

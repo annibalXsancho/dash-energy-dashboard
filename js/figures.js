@@ -5,7 +5,7 @@
 // des ordonnées par graphique, grille discrète, écart de 2 px entre deux aplats
 // voisins, survol partout, étiquettes directes seulement là où elles tiennent.
 
-import * as theme from "./theme.js?v=5";
+import * as theme from "./theme.js?v=7";
 
 /** Figure de repli quand la sélection ne renvoie rien. */
 export function empty(message = "Aucune donnée sur cette sélection") {
@@ -218,5 +218,91 @@ export function loadProfile(matrix) {
   layout.yaxis.autorange = "reversed";
   layout.yaxis.showgrid = false;
   layout.xaxis.showgrid = false;
+  return { data, layout };
+}
+
+/** Signature énergétique : un point par journée, degrés-jours en abscisse et
+ *  énergie en ordonnée. La droite est la thermosensibilité du site — sa pente
+ *  se lit en kWh par degré-jour, son ordonnée à l'origine est le talon.
+ *
+ *  Les journées hors période affichée restent visibles, en retrait : elles
+ *  donnent au nuage sa forme, et le trait s'appuie sur elles. */
+export function energySignature(inside, outside, model, unit, grain = "jour") {
+  if (!inside.length && !outside.length) {
+    return empty("Aucune période complète à croiser avec la météo");
+  }
+  const since = grain === "semaine" ? "semaine du %{customdata}" : "%{customdata}";
+  const hover = `%{x:,.1f} ${unit}<br>%{y:,.0f} kWh<br>${since}<extra></extra>`;
+  const cloud = (rows, name, color, size) => ({
+    type: "scatter",
+    mode: "markers",
+    name,
+    x: rows.map((p) => p.x),
+    y: rows.map((p) => p.y),
+    customdata: rows.map((p) => p.day),
+    marker: { color, size, line: { width: 0 } },
+    hovertemplate: hover,
+  });
+
+  const data = [];
+  if (outside.length) {
+    data.push(cloud(outside, "Hors période", theme.AXIS, 6));
+  }
+  data.push(cloud(inside, "Période affichée", theme.SERIES[0], 8));
+
+  if (model) {
+    const all = [...outside, ...inside].map((p) => p.x);
+    const x0 = Math.min(...all);
+    const x1 = Math.max(...all);
+    data.push({
+      type: "scatter",
+      mode: "lines",
+      name: "Thermosensibilité",
+      x: [x0, x1],
+      y: [model.intercept + model.slope * x0, model.intercept + model.slope * x1],
+      line: { color: theme.SERIES[1], width: 2, dash: "dot" },
+      hoverinfo: "skip",
+    });
+  }
+
+  const layout = theme.baseLayout({ hovermode: "closest" });
+  const per = ` / ${grain}`;
+  layout.xaxis.title = { text: unit + per, font: { color: theme.INK_MUTED, size: 11 } };
+  layout.xaxis.rangemode = "tozero";
+  layout.yaxis.title = { text: "kWh" + per, font: { color: theme.INK_MUTED, size: 11 } };
+  layout.yaxis.rangemode = "tozero";
+  return { data, layout };
+}
+
+/** Consommation observée et consommation attendue au vu du climat.
+ *  Les deux courbes sont en kWh : un seul axe, et l'écart se lit directement —
+ *  au-dessus du trait, la journée a consommé plus que le temps ne l'expliquait. */
+export function climateExpectation(cells, model, mode) {
+  if (!cells.length || !model) return empty("Pas de modèle climatique exploitable");
+  const x = cells.map((c) => new Date(c.t));
+  const expected = cells.map((c) =>
+    Math.max(0, model.intercept + model.slope * (mode === "froid" ? c.cdd : c.hdd)));
+  const data = [
+    {
+      type: "bar",
+      name: "Observée",
+      x,
+      y: cells.map((c) => c.kwh),
+      marker: { color: theme.SERIES[0], line: { color: theme.SURFACE, width: 1 } },
+      hovertemplate: "%{y:,.0f} kWh observés<extra></extra>",
+    },
+    {
+      type: "scatter",
+      mode: "lines",
+      name: "Attendue par le climat",
+      x,
+      y: expected,
+      line: { color: theme.SERIES[1], width: 2 },
+      hovertemplate: "%{y:,.0f} kWh attendus<extra></extra>",
+    },
+  ];
+  const layout = theme.baseLayout({ hovermode: "x unified" });
+  layout.yaxis.title = { text: "kWh / jour", font: { color: theme.INK_MUTED, size: 11 } };
+  layout.yaxis.rangemode = "tozero";
   return { data, layout };
 }

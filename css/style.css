@@ -328,6 +328,25 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .tariff-input .unit { color: var(--ink-muted); font-size: var(--fs-sm); white-space: nowrap; }
 .tariff-note { font-size: var(--fs-sm); color: var(--ink-muted); margin: var(--sp-3) 0 0; }
 .tariff-note strong { color: var(--ink-2); font-weight: 600; }
+.tariff-note.is-error { color: var(--critical); }
+
+/* --- Météo --------------------------------------------------------------- */
+.weather-results { margin-top: var(--sp-1); }
+.weather-results button {
+  border: 0;
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.weather-results button:hover { background: var(--surface-3); color: var(--ink); }
+/* Le livrable embarque déjà ses températures : il n'a ni à chercher une
+   commune, ni à parler d'un service qu'il n'appellera jamais. */
+.is-export .weather-online { display: none; }
 
 /* --- Indicateurs --------------------------------------------------------- */
 .kpis {

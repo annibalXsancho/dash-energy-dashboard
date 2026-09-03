@@ -71,6 +71,17 @@ d'occupation et les arrêts machine d'un client.
 - **`Date.parse` est trop permissif** : il lit « 45900.5 » comme l'an 45900. Le
   recours à l'analyseur du navigateur est filtré aux chaînes contenant `-`, `/`
   ou `:`.
+- **La signature énergétique se lit par semaine, pas par jour.** Au pas
+  journalier, l'arrêt du week-end fait plus varier la consommation que la
+  température : sur un relevé de test dont la réponse était connue (350 kWh/DJU),
+  l'ajustement journalier rendait R² = 0,14 et une pente de 249 ; l'hebdomadaire
+  0,96 et 311. `weather.signature()` bascule au jour en dessous de six semaines
+  complètes — et `isUsable()` refuse toute droite de pente négative ou de
+  R² < 0,3 plutôt que d'habiller du bruit en diagnostic.
+- **Python de python.org n'a pas de magasin de certificats** tant qu'on n'a pas
+  lancé « Install Certificates.command » : `build_export.py --meteo` échouait en
+  TLS. Il se rabat sur `certifi`. Et l'erreur arrive emballée dans un
+  `URLError` — c'est `error.reason` qu'il faut regarder, pas le type levé.
 - Côté Dash (version locale) : `dcc.Graph(responsive=True)` impose
   `height: 100 %` en style en ligne — la hauteur se pose sur le conteneur
   parent ; et les composants Dash 4 se thèment par variables `--Dash-*`.
@@ -87,7 +98,8 @@ d'occupation et les arrêts machine d'un client.
 
 ## Suites envisagées, non faites
 
-Normaliseurs d'import (export Enedis, sous-comptage propriétaire) ; comparaison
-avant/après corrigée des degrés-jours (la preuve d'économie qui justifie les
-honoraires) ; diagnostic de compensation d'énergie réactive quand le CosPhi est
-disponible ; annotations d'événements sur la courbe.
+Normaliseurs d'import (export Enedis, sous-comptage propriétaire) ; correction
+climatique entre **deux périodes choisies** (aujourd'hui elle ne compare que la
+période affichée à celle qui la précède immédiatement) ; diagnostic de
+compensation d'énergie réactive quand le CosPhi est disponible ; annotations
+d'événements sur la courbe.

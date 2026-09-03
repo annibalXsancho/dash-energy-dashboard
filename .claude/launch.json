@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "page-web",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8123"],
+      "port": 8123,
+      "url": "http://127.0.0.1:8123"
+    },
+    {
       "name": "energy-dashboard",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["app.py"],

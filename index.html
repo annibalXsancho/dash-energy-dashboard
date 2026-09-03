@@ -8,7 +8,7 @@
 <!-- Icône d'onglet en URL de données : elle suit le fichier, donc le livrable
      autonome l'emporte avec lui sans requête ni fichier voisin. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%231a1a19'/%3E%3Cpath%20d='M5%2023h5v-9h6v13h6v-8h5'%20fill='none'%20stroke='%233987e5'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=7">
 <!-- plotly.js embarqué dans le dépôt (voir vendor/LISEZ-MOI.md) : la page
      fonctionne hors ligne et la version ne bouge pas sans qu'on le décide.
      Le lot « cartesian » suffit (1,5 Mo au lieu de 4,3 Mo). L'ordre compte :
@@ -94,6 +94,45 @@
     </p>
   </details>
 
+  <details class="tariff-block" id="weather-block">
+    <summary class="table-summary">Météo et rigueur climatique</summary>
+    <div class="tariff-grid">
+      <div class="tariff-field weather-online">
+        <label for="weather-place">Commune du site</label>
+        <div class="field-row">
+          <input type="search" id="weather-place" placeholder="Lyon, Roubaix, 59100…">
+          <button class="btn btn--tonal" id="weather-search">Chercher</button>
+          <button class="btn btn--ghost" id="weather-forget" hidden>Retirer</button>
+        </div>
+        <div class="chips weather-results" id="weather-results" hidden
+             role="group" aria-label="Communes trouvées"></div>
+      </div>
+      <div class="tariff-field">
+        <label for="weather-base">Température de base</label>
+        <span class="tariff-input">
+          <input type="number" id="weather-base" min="0" max="30" step="0.5">
+          <span class="unit">°C</span>
+        </span>
+      </div>
+      <div class="tariff-field">
+        <label for="weather-mode">Sens de la thermosensibilité</label>
+        <select id="weather-mode">
+          <option value="auto">Automatique</option>
+          <option value="chauffage">Chauffage (DJU)</option>
+          <option value="froid">Climatisation (DJR)</option>
+        </select>
+      </div>
+    </div>
+    <p class="tariff-note" id="weather-status"></p>
+    <p class="tariff-note weather-online">
+      Les degrés-jours suivent la <strong>méthode Costic</strong>, celle de Météo-France.
+      Les températures viennent d'<strong>open-meteo.com</strong> : seules la commune
+      choisie et les dates du relevé y sont envoyées —
+      <strong>aucune mesure de puissance ne quitte ce navigateur</strong>.
+      Elles sont ensuite mémorisées ici, et le livrable les emporte avec lui.
+    </p>
+  </details>
+
   <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
 
   <section class="mapper" id="mapper" hidden aria-labelledby="mapper-title">
@@ -161,6 +200,22 @@
       <div class="graph-slot"><div class="graph" id="fig-duration"></div></div>
     </section>
 
+    <section class="card" id="card-signature" hidden>
+      <header class="card-head">
+        <h2 class="card-title">Signature énergétique</h2>
+        <p class="card-hint" id="hint-signature">Énergie d'une journée en regard de sa rigueur climatique.</p>
+      </header>
+      <div class="graph-slot"><div class="graph" id="fig-signature"></div></div>
+    </section>
+
+    <section class="card" id="card-expected" hidden>
+      <header class="card-head">
+        <h2 class="card-title">Observé et attendu</h2>
+        <p class="card-hint" id="hint-expected">Ce que le climat explique, et ce qu'il n'explique pas.</p>
+      </header>
+      <div class="graph-slot"><div class="graph" id="fig-expected"></div></div>
+    </section>
+
     <section class="card card--wide">
       <header class="card-head">
         <h2 class="card-title">Profil de charge</h2>
@@ -195,6 +250,6 @@
   </footer>
 </div>
 
-<script type="module" src="js/app.js?v=5"></script>
+<script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>
